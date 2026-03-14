@@ -1,6 +1,6 @@
 import nacl from 'tweetnacl'
 import { base64ToBytes, base64UrlToBytes, bytesToUtf8 } from './base64url'
-import { env, requireEnv } from './env'
+import { env, requireQrVerifyKeyEnv } from './env'
 
 export type QrTokenType = 'bib' | 'start' | 'checkpoint' | 'finish'
 
@@ -31,7 +31,7 @@ const PREFIX = 'RM1'
 
 export function decodeAndVerifySignedQr(raw: string): DecodedSignedQr {
   try {
-    requireEnv()
+    requireQrVerifyKeyEnv()
     const trimmed = raw.trim()
     const parts = trimmed.split('.')
     if (parts.length !== 3 || parts[0] !== PREFIX) {

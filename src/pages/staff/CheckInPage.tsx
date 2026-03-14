@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseOrNull } from '../../lib/supabase'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 
@@ -35,10 +35,19 @@ export function CheckInPage() {
     async function load() {
       setLoading(true)
       setError(null)
+
+      const supabase = getSupabaseOrNull()
+      if (!supabase) {
+        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load staff check-in.')
+        setRows([])
+        setLoading(false)
+        return
+      }
+
       const { data, error } = await supabase
         .from('staff_checkin_view')
         .select('registration_id,athlete_id,full_name,email,phone,checked_in,bib_number')
-        .eq('event_id', eventId)
+        .eq('event_id', eventId!)
         .limit(500)
 
       if (cancelled) return
@@ -58,6 +67,9 @@ export function CheckInPage() {
 
   async function toggleCheckIn(registrationId: string, checkedIn: boolean) {
     try {
+      const supabase = getSupabaseOrNull()
+      if (!supabase) throw new Error('Supabase is not configured.')
+
       const { error } = await supabase
         .from('registrations')
         .update({ checked_in: !checkedIn })

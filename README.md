@@ -41,6 +41,14 @@ This repo is an MVP implementation of an “operate-from-a-phone” race timing 
      - `VITE_SUPABASE_ANON_KEY`
      - `VITE_QR_VERIFY_PUBLIC_KEY_B64` (Ed25519 public key, base64)
 
+   Localhost verification (no Supabase required):
+
+   - Set `VITE_LOCAL_AUTH=1`
+   - Optional: set `VITE_LOCAL_AUTH_AUTO_ADMIN=1` to auto-sign-in on start
+   - Demo credentials:
+     - Email: `admin@admin.com`
+     - Password: `123456789@`
+
 3. Run
 
    - `npm run dev`

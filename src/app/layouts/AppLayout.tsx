@@ -1,6 +1,5 @@
 import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
-import { supabase } from '../../lib/supabase'
 import { AutoResumeRace } from '../components/AutoResumeRace'
 
 export function AppLayout() {
@@ -20,7 +19,7 @@ export function AppLayout() {
             </Link>
             <button
               className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm"
-              onClick={() => void supabase.auth.signOut()}
+              onClick={() => void auth.signOut()}
             >
               Sign out
             </button>

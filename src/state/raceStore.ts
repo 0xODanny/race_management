@@ -71,7 +71,8 @@ export const useRaceStore = create<RaceStoreState>((set, get) => ({
     // For MVP: use Supabase Edge Function `race-package`.
     // It returns the full route definition and athlete/bib binding.
     try {
-      const { supabase } = await import('../lib/supabase')
+      const { getSupabase } = await import('../lib/supabase')
+      const supabase = getSupabase()
       const { data, error } = await supabase.functions.invoke('race-package', {
         body: {
           eventId: decoded.payload.eventId,

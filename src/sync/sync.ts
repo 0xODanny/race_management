@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { getSupabaseOrNull } from '../lib/supabase'
 import { getDb } from '../offline/db'
 import {
   deleteSyncQueueItem,
@@ -11,6 +11,9 @@ import {
 type SyncOutcome = { ok: true } | { ok: false; error: string }
 
 async function syncScanEvent(localScanId: string): Promise<SyncOutcome> {
+  const supabase = getSupabaseOrNull()
+  if (!supabase) return { ok: false, error: 'Supabase is not configured' }
+
   const db = await getDb()
   const scan = await db.get('scan_events', localScanId)
   if (!scan) return { ok: true }
@@ -44,6 +47,9 @@ async function syncScanEvent(localScanId: string): Promise<SyncOutcome> {
 }
 
 async function syncFinishValidation(localSessionId: string): Promise<SyncOutcome> {
+  const supabase = getSupabaseOrNull()
+  if (!supabase) return { ok: false, error: 'Supabase is not configured' }
+
   const session = await getLocalSession(localSessionId)
   if (!session) return { ok: true }
 
@@ -65,6 +71,7 @@ async function syncFinishValidation(localSessionId: string): Promise<SyncOutcome
 
 export async function syncNow(params?: { maxItems?: number }): Promise<void> {
   if (!navigator.onLine) return
+  if (!getSupabaseOrNull()) return
   const maxItems = params?.maxItems ?? 25
   const items = await peekSyncQueue(maxItems)
 

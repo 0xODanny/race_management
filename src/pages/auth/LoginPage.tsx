@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../auth/AuthProvider'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { Label } from '../../ui/Label'
@@ -8,6 +8,7 @@ import { Label } from '../../ui/Label'
 export function LoginPage() {
   const nav = useNavigate()
   const loc = useLocation() as any
+  const auth = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,12 +17,20 @@ export function LoginPage() {
 
   const can = useMemo(() => email.includes('@') && password.length >= 6, [email, password])
 
+  useEffect(() => {
+    if (auth.mode !== 'local') return
+    // Convenience for localhost verification.
+    if (!email) setEmail('admin@admin.com')
+    if (!password) setPassword('123456789@')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.mode])
+
   async function signIn() {
     setLoading(true)
     setError(null)
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
+      const r = await auth.signInWithPassword({ email, password })
+      if (!r.ok) throw new Error(r.error)
       const to = loc?.state?.from || '/athlete'
       nav(to, { replace: true })
     } catch (e) {
@@ -35,7 +44,9 @@ export function LoginPage() {
     <div className="mx-auto max-w-md space-y-6">
       <section className="rounded-lg border border-zinc-200 bg-white p-5">
         <h1 className="text-2xl font-bold">Athlete login</h1>
-        <p className="mt-2 text-sm text-zinc-700">Use your event account.</p>
+        <p className="mt-2 text-sm text-zinc-700">
+          {auth.mode === 'local' ? 'Local demo auth is enabled for localhost verification.' : 'Use your event account.'}
+        </p>
       </section>
 
       <section className="rounded-lg border border-zinc-200 bg-white p-5">
@@ -61,7 +72,9 @@ export function LoginPage() {
           </Button>
 
           <div className="text-xs text-zinc-600">
-            For MVP, accounts are created by admins/staff (or via Supabase Auth dashboard).
+            {auth.mode === 'local'
+              ? 'Demo credentials are stored locally (no Supabase required).'
+              : 'For MVP, accounts are created by admins/staff (or via Supabase Auth dashboard).'}
           </div>
         </div>
       </section>

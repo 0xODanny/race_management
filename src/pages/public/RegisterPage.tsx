@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseOrNull } from '../../lib/supabase'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { Label } from '../../ui/Label'
@@ -45,6 +45,9 @@ export function RegisterPage() {
     setSuccess(null)
 
     try {
+      const supabase = getSupabaseOrNull()
+      if (!supabase) throw new Error('Supabase is not configured for registration.')
+
       const { error } = await supabase.functions.invoke('register-for-event', {
         body: {
           eventId,

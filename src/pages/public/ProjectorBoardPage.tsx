@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseOrNull } from '../../lib/supabase'
 
 type ResultRow = {
   id: string
@@ -45,10 +45,17 @@ export function ProjectorBoardPage() {
 
     async function load() {
       setError(null)
+      const supabase = getSupabaseOrNull()
+      if (!supabase) {
+        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load results.')
+        setRows([])
+        return
+      }
+
       const { data, error } = await supabase
         .from('results_public')
         .select('id,status,official_time_ms,provisional_time_ms,rank,athlete_name,bib_number,last_checkpoint_code,updated_at')
-        .eq('event_id', eventId)
+        .eq('event_id', eventId!)
         .limit(200)
 
       if (cancelled) return
@@ -73,6 +80,9 @@ export function ProjectorBoardPage() {
     }
 
     void load()
+
+    const supabase = getSupabaseOrNull()
+    if (!supabase) return
 
     const channel = supabase
       .channel(`projector-results:${eventId}`)

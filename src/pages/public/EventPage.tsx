@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseOrNull } from '../../lib/supabase'
 
 type EventRow = {
   id: string
@@ -21,14 +21,22 @@ export function EventPage() {
     let cancelled = false
     async function load() {
       setError(null)
+
+      const supabase = getSupabaseOrNull()
+      if (!supabase) {
+        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load this event.')
+        setEvent(null)
+        return
+      }
+
       const { data, error } = await supabase
         .from('events')
         .select('id,title,description,location,start_date,status')
-        .eq('id', eventId)
+        .eq('id', eventId!)
         .maybeSingle()
       if (cancelled) return
       if (error) setError(error.message)
-      setEvent((data as EventRow) ?? null)
+      setEvent((data as unknown as EventRow) ?? null)
     }
     void load()
     return () => {

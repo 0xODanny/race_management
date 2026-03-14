@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseOrNull } from '../../lib/supabase'
 
 type EventRow = {
   id: string
@@ -20,6 +20,15 @@ export function HomePage() {
     async function load() {
       setLoading(true)
       setError(null)
+
+      const supabase = getSupabaseOrNull()
+      if (!supabase) {
+        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load events.')
+        setEvents([])
+        setLoading(false)
+        return
+      }
+
       const { data, error } = await supabase
         .from('events')
         .select('id,title,location,start_date,status')
