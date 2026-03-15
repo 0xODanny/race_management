@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
 import { isTrialModeEnabled } from '../../lib/demoMode'
 import { getDemoResults } from '../../demo/trialData'
+import { useI18n } from '../../i18n/i18n'
 
 type ResultRow = {
   id: string
@@ -27,6 +28,7 @@ function formatMs(ms: number | null) {
 
 export function ProjectorBoardPage() {
   const { eventId } = useParams()
+  const { tr } = useI18n()
   const [rows, setRows] = useState<ResultRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
@@ -55,7 +57,12 @@ export function ProjectorBoardPage() {
 
       const supabase = getSupabaseOrNull()
       if (!supabase) {
-        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load results.')
+        setError(
+          tr({
+            en: 'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load results.',
+            pt: 'O Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para carregar resultados.',
+          }),
+        )
         setRows([])
         return
       }
@@ -109,18 +116,20 @@ export function ProjectorBoardPage() {
       cancelled = true
       void supabase.removeChannel(channel)
     }
-  }, [eventId])
+  }, [eventId, tr])
 
-  if (!eventId) return <div>Missing event.</div>
+  if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
     <div className="min-h-[calc(100vh-6rem)] rounded-lg bg-black p-6 text-white">
       <div className="flex items-end justify-between">
         <div>
-          <div className="text-sm opacity-70">Live leaderboard</div>
+          <div className="text-sm opacity-70">{tr({ en: 'Live leaderboard', pt: 'Leaderboard ao vivo' })}</div>
           <div className="text-3xl font-extrabold tracking-wide">EVENT {eventId}</div>
         </div>
-        <div className="text-sm opacity-70">Provisional → Official after validation</div>
+        <div className="text-sm opacity-70">
+          {tr({ en: 'Provisional → Official after validation', pt: 'Provisional → Official após validação' })}
+        </div>
       </div>
 
       {error ? <div className="mt-4 text-sm text-red-300">{error}</div> : null}
@@ -131,10 +140,10 @@ export function ProjectorBoardPage() {
             <tr>
               <th className="px-4 py-3">Pos</th>
               <th className="px-4 py-3">Bib</th>
-              <th className="px-4 py-3">Athlete</th>
+              <th className="px-4 py-3">{tr({ en: 'Athlete', pt: 'Atleta' })}</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Time</th>
-              <th className="px-4 py-3">Last</th>
+              <th className="px-4 py-3">{tr({ en: 'Time', pt: 'Tempo' })}</th>
+              <th className="px-4 py-3">{tr({ en: 'Last', pt: 'Último' })}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10 text-lg">
@@ -155,7 +164,7 @@ export function ProjectorBoardPage() {
             {!sorted.length ? (
               <tr>
                 <td className="px-4 py-6 text-white/70" colSpan={6}>
-                  Waiting for riders…
+                  {tr({ en: 'Waiting for riders…', pt: 'Aguardando atletas…' })}
                 </td>
               </tr>
             ) : null}
@@ -164,7 +173,10 @@ export function ProjectorBoardPage() {
       </div>
 
       <div className="mt-4 text-sm text-white/60">
-        On-course riders update when they scan anchor splits or checkpoints.
+        {tr({
+          en: 'On-course riders update when they scan anchor splits or checkpoints.',
+          pt: 'As atualizações acontecem quando os atletas escaneiam anchors ou Checkpoints.',
+        })}
       </div>
     </div>
   )

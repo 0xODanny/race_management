@@ -6,12 +6,14 @@ import { isTrialModeEnabled } from '../../lib/demoMode'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { Label } from '../../ui/Label'
+import { useI18n } from '../../i18n/i18n'
 
 type Sex = 'F' | 'M' | 'X'
 
 export function RegisterPage() {
   const { eventId } = useParams()
   const auth = useAuth()
+  const { tr } = useI18n()
 
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -47,12 +49,23 @@ export function RegisterPage() {
 
     try {
       if (isTrialModeEnabled()) {
-        setSuccess('Demo registration saved (local). You can now preview staff check-in and race-day pages.')
+        setSuccess(
+          tr({
+            en: 'Demo registration saved (local). You can now preview staff check-in and race-day pages.',
+            pt: 'Inscrição demo salva (local). Agora você pode visualizar o check-in da equipe e as telas do dia da prova.',
+          }),
+        )
         return
       }
 
       const supabase = getSupabaseOrNull()
-      if (!supabase) throw new Error('Supabase is not configured for registration.')
+      if (!supabase)
+        throw new Error(
+          tr({
+            en: 'Supabase is not configured for registration.',
+            pt: 'O Supabase não está configurado para inscrições.',
+          }),
+        )
 
       const { error } = await supabase.functions.invoke('register-for-event', {
         body: {
@@ -67,45 +80,56 @@ export function RegisterPage() {
         },
       })
       if (error) throw error
-      setSuccess('Registration submitted. You can now check in with staff on race day.')
+      setSuccess(
+        tr({
+          en: 'Registration submitted. You can now check in with staff on race day.',
+          pt: 'Inscrição enviada. Agora você pode fazer check-in com a equipe no dia da prova.',
+        }),
+      )
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Registration failed')
+      setError(e instanceof Error ? e.message : tr({ en: 'Registration failed', pt: 'Falha na inscrição' }))
     } finally {
       setLoading(false)
     }
   }
 
-  if (!eventId) return <div>Missing event.</div>
+  if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-zinc-200 bg-white p-5">
-        <h1 className="text-2xl font-bold">Event registration</h1>
+        <h1 className="text-2xl font-bold">{tr({ en: 'Event registration', pt: 'Inscrição no evento' })}</h1>
         {!auth.user ? (
           <p className="mt-2 text-sm text-zinc-800">
-            Please <Link to="/login" className="underline">log in</Link> to register.
+            {tr({ en: 'Please', pt: 'Por favor' })}{' '}
+            <Link to="/login" className="underline">
+              {tr({ en: 'log in', pt: 'faça login' })}
+            </Link>{' '}
+            {tr({ en: 'to register.', pt: 'para se inscrever.' })}
           </p>
         ) : (
-          <p className="mt-2 text-sm text-zinc-800">Logged in as {auth.user.email}</p>
+          <p className="mt-2 text-sm text-zinc-800">
+            {tr({ en: 'Logged in as', pt: 'Logado como' })} {auth.user.email}
+          </p>
         )}
       </section>
 
       <section className="rounded-lg border border-zinc-200 bg-white p-5">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <Label>Full name</Label>
+            <Label>{tr({ en: 'Full name', pt: 'Nome completo' })}</Label>
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
           </div>
           <div>
-            <Label>Phone</Label>
+            <Label>{tr({ en: 'Phone', pt: 'Telefone' })}</Label>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
           </div>
           <div>
-            <Label>Birthdate</Label>
+            <Label>{tr({ en: 'Birthdate', pt: 'Data de nascimento' })}</Label>
             <Input type="date" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} />
           </div>
           <div>
-            <Label>Sex</Label>
+            <Label>{tr({ en: 'Sex', pt: 'Sexo' })}</Label>
             <select
               className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-black"
               value={sex}
@@ -117,25 +141,32 @@ export function RegisterPage() {
             </select>
           </div>
           <div>
-            <Label>Category (optional)</Label>
-            <Input value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="Category ID" />
+            <Label>{tr({ en: 'Category (optional)', pt: 'Categoria (opcional)' })}</Label>
+            <Input
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              placeholder={tr({ en: 'Category ID', pt: 'ID da categoria' })}
+            />
           </div>
           <div className="md:col-span-2">
             <div className="mt-2 text-xs text-zinc-600">
-              Categories are normally selected from the event list; this MVP uses a simple field.
+              {tr({
+                en: 'Categories are normally selected from the event list; this MVP uses a simple field.',
+                pt: 'Normalmente as categorias são selecionadas na lista do evento; neste MVP usamos um campo simples.',
+              })}
             </div>
           </div>
         </div>
 
         <div className="mt-6">
-          <h2 className="text-lg font-bold">Emergency contact</h2>
+          <h2 className="text-lg font-bold">{tr({ en: 'Emergency contact', pt: 'Contato de emergência' })}</h2>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             <div>
-              <Label>Name</Label>
+              <Label>{tr({ en: 'Name', pt: 'Nome' })}</Label>
               <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} />
             </div>
             <div>
-              <Label>Phone</Label>
+              <Label>{tr({ en: 'Phone', pt: 'Telefone' })}</Label>
               <Input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
             </div>
           </div>
@@ -150,8 +181,13 @@ export function RegisterPage() {
               onChange={(e) => setWaiverAccepted(e.target.checked)}
             />
             <span>
-              I accept the event waiver and acknowledge the risks of outdoor racing.
-              <span className="block text-xs text-zinc-600">(Full waiver text is configured per event.)</span>
+              {tr({
+                en: 'I accept the event waiver and acknowledge the risks of outdoor racing.',
+                pt: 'Eu aceito o termo de responsabilidade do evento e reconheço os riscos de atividades ao ar livre.',
+              })}
+              <span className="block text-xs text-zinc-600">
+                {tr({ en: '(Full waiver text is configured per event.)', pt: '(O texto completo é configurado por evento.)' })}
+              </span>
             </span>
           </label>
         </div>
@@ -161,7 +197,9 @@ export function RegisterPage() {
 
         <div className="mt-5">
           <Button size="lg" onClick={() => void submit()} disabled={!canSubmit || loading}>
-            {loading ? 'Submitting…' : 'Submit registration'}
+            {loading
+              ? tr({ en: 'Submitting…', pt: 'Enviando…' })
+              : tr({ en: 'Submit registration', pt: 'Enviar inscrição' })}
           </Button>
         </div>
       </section>

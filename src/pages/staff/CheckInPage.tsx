@@ -5,6 +5,7 @@ import { isTrialModeEnabled } from '../../lib/demoMode'
 import { getDemoCheckInRows, toggleDemoCheckIn } from '../../demo/trialData'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
+import { useI18n } from '../../i18n/i18n'
 
 type CheckInRow = {
   registration_id: string
@@ -18,6 +19,7 @@ type CheckInRow = {
 
 export function CheckInPage() {
   const { eventId } = useParams()
+  const { tr } = useI18n()
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<CheckInRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +48,12 @@ export function CheckInPage() {
 
       const supabase = getSupabaseOrNull()
       if (!supabase) {
-        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load staff check-in.')
+        setError(
+          tr({
+            en: 'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load staff check-in.',
+            pt: 'O Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para carregar o check-in da equipe.',
+          }),
+        )
         setRows([])
         setLoading(false)
         return
@@ -71,7 +78,7 @@ export function CheckInPage() {
     return () => {
       cancelled = true
     }
-  }, [eventId])
+  }, [eventId, tr])
 
   async function toggleCheckIn(registrationId: string, checkedIn: boolean) {
     try {
@@ -82,7 +89,8 @@ export function CheckInPage() {
       }
 
       const supabase = getSupabaseOrNull()
-      if (!supabase) throw new Error('Supabase is not configured.')
+      if (!supabase)
+        throw new Error(tr({ en: 'Supabase is not configured.', pt: 'O Supabase não está configurado.' }))
 
       const { error } = await supabase
         .from('registrations')
@@ -91,34 +99,43 @@ export function CheckInPage() {
       if (error) throw error
       setRows((prev) => prev.map((r) => (r.registration_id === registrationId ? { ...r, checked_in: !checkedIn } : r)))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update failed')
+      setError(e instanceof Error ? e.message : tr({ en: 'Update failed', pt: 'Falha ao atualizar' }))
     }
   }
 
-  if (!eventId) return <div>Missing event.</div>
+  if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Staff check-in</h1>
+      <h1 className="text-2xl font-bold">{tr({ en: 'Staff check-in', pt: 'Check-in da equipe' })}</h1>
       <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <div className="text-sm font-semibold">Search athlete</div>
+        <div className="text-sm font-semibold">{tr({ en: 'Search athlete', pt: 'Buscar atleta' })}</div>
         <div className="mt-2">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, phone, bib" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={tr({ en: 'Name, email, phone, bib', pt: 'Nome, email, telefone, bib' })}
+          />
         </div>
-        <div className="mt-2 text-xs text-zinc-600">Assigning bibs is handled in the admin tools in this MVP.</div>
+        <div className="mt-2 text-xs text-zinc-600">
+          {tr({
+            en: 'Assigning bibs is handled in the admin tools in this MVP.',
+            pt: 'A atribuição de bibs é feita nas ferramentas de admin neste MVP.',
+          })}
+        </div>
       </div>
 
       {error ? <div className="text-sm text-red-700">{error}</div> : null}
-      {loading ? <div className="text-sm">Loading…</div> : null}
+      {loading ? <div className="text-sm">{tr({ en: 'Loading…', pt: 'Carregando…' })}</div> : null}
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50">
             <tr>
-              <th className="px-3 py-2">Athlete</th>
+              <th className="px-3 py-2">{tr({ en: 'Athlete', pt: 'Atleta' })}</th>
               <th className="px-3 py-2">Bib</th>
-              <th className="px-3 py-2">Checked in</th>
-              <th className="px-3 py-2">Action</th>
+              <th className="px-3 py-2">{tr({ en: 'Checked in', pt: 'Check-in' })}</th>
+              <th className="px-3 py-2">{tr({ en: 'Action', pt: 'Ação' })}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
@@ -129,10 +146,10 @@ export function CheckInPage() {
                   <div className="text-xs text-zinc-600">{r.email ?? r.phone ?? '—'}</div>
                 </td>
                 <td className="px-3 py-2">{r.bib_number ?? '—'}</td>
-                <td className="px-3 py-2">{r.checked_in ? 'YES' : 'NO'}</td>
+                <td className="px-3 py-2">{r.checked_in ? tr({ en: 'YES', pt: 'SIM' }) : tr({ en: 'NO', pt: 'NÃO' })}</td>
                 <td className="px-3 py-2">
                   <Button variant="secondary" onClick={() => void toggleCheckIn(r.registration_id, r.checked_in)}>
-                    {r.checked_in ? 'Undo' : 'Check-in'}
+                    {r.checked_in ? tr({ en: 'Undo', pt: 'Desfazer' }) : tr({ en: 'Check-in', pt: 'Check-in' })}
                   </Button>
                 </td>
               </tr>
@@ -140,7 +157,7 @@ export function CheckInPage() {
             {!filtered.length ? (
               <tr>
                 <td className="px-3 py-4 text-zinc-700" colSpan={4}>
-                  No athletes.
+                  {tr({ en: 'No athletes.', pt: 'Nenhum atleta.' })}
                 </td>
               </tr>
             ) : null}

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
 import { isTrialModeEnabled } from '../../lib/demoMode'
 import { getDemoResults } from '../../demo/trialData'
+import { useI18n } from '../../i18n/i18n'
 
 type ResultRow = {
   id: string
@@ -29,6 +30,7 @@ function formatMs(ms: number | null) {
 
 export function LiveResultsPage() {
   const { eventId } = useParams()
+  const { tr } = useI18n()
   const [rows, setRows] = useState<ResultRow[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -55,7 +57,12 @@ export function LiveResultsPage() {
 
       const supabase = getSupabaseOrNull()
       if (!supabase) {
-        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load results.')
+        setError(
+          tr({
+            en: 'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load results.',
+            pt: 'O Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para carregar resultados.',
+          }),
+        )
         setRows([])
         return
       }
@@ -99,16 +106,16 @@ export function LiveResultsPage() {
       cancelled = true
       void supabase.removeChannel(channel)
     }
-  }, [eventId])
+  }, [eventId, tr])
 
-  if (!eventId) return <div>Missing event.</div>
+  if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Live results</h1>
+        <h1 className="text-2xl font-bold">{tr({ en: 'Live results', pt: 'Resultados ao vivo' })}</h1>
         <Link to={`/events/${eventId}/projector`} className="text-sm underline">
-          Projector mode
+          {tr({ en: 'Projector mode', pt: 'Modo projetor' })}
         </Link>
       </div>
 
@@ -118,12 +125,12 @@ export function LiveResultsPage() {
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50">
             <tr>
-              <th className="px-3 py-2">Pos</th>
+              <th className="px-3 py-2">{tr({ en: 'Pos', pt: 'Pos' })}</th>
               <th className="px-3 py-2">Bib</th>
-              <th className="px-3 py-2">Athlete</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Time</th>
-              <th className="px-3 py-2">Last</th>
+              <th className="px-3 py-2">{tr({ en: 'Athlete', pt: 'Atleta' })}</th>
+              <th className="px-3 py-2">{tr({ en: 'Status', pt: 'Status' })}</th>
+              <th className="px-3 py-2">{tr({ en: 'Time', pt: 'Tempo' })}</th>
+              <th className="px-3 py-2">{tr({ en: 'Last', pt: 'Último' })}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
@@ -142,7 +149,7 @@ export function LiveResultsPage() {
             {!sorted.length ? (
               <tr>
                 <td className="px-3 py-4 text-zinc-700" colSpan={6}>
-                  No results yet.
+                  {tr({ en: 'No results yet.', pt: 'Sem resultados ainda.' })}
                 </td>
               </tr>
             ) : null}

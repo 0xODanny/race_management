@@ -1,4 +1,5 @@
 import { Link, matchPath, useLocation } from 'react-router-dom'
+import { useI18n } from '../../i18n/i18n'
 
 type BackTarget = { to: string; label: string } | null
 
@@ -43,6 +44,7 @@ function getBackTarget(pathname: string): BackTarget {
 }
 
 export function BackNav() {
+  const { tr } = useI18n()
   const loc = useLocation()
   const target = getBackTarget(loc.pathname)
   if (!target) return null
@@ -52,10 +54,10 @@ export function BackNav() {
       <Link
         to={target.to}
         className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900"
-        aria-label={`Back to ${target.label}`}
+        aria-label={tr({ en: `Back to ${target.label}`, pt: `Voltar para ${target.label}` })}
       >
         <span aria-hidden>←</span>
-        Back
+        {tr({ en: 'Back', pt: 'Voltar' })}
       </Link>
     </div>
   )

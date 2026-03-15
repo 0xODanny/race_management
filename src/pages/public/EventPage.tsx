@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
 import { isTrialModeEnabled } from '../../lib/demoMode'
 import { getDemoEvent } from '../../demo/trialData'
+import { useI18n } from '../../i18n/i18n'
 
 type EventRow = {
   id: string
@@ -15,6 +16,7 @@ type EventRow = {
 
 export function EventPage() {
   const { eventId } = useParams()
+  const { tr } = useI18n()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -28,7 +30,7 @@ export function EventPage() {
         const e = getDemoEvent(eventId!)
         if (!e) {
           setEvent(null)
-          setError('Demo event not found')
+          setError(tr({ en: 'Demo event not found', pt: 'Evento demo não encontrado' }))
         } else {
           setEvent({
             id: e.id,
@@ -44,7 +46,12 @@ export function EventPage() {
 
       const supabase = getSupabaseOrNull()
       if (!supabase) {
-        setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load this event.')
+        setError(
+          tr({
+            en: 'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load this event.',
+            pt: 'O Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para carregar este evento.',
+          }),
+        )
         setEvent(null)
         return
       }
@@ -62,9 +69,9 @@ export function EventPage() {
     return () => {
       cancelled = true
     }
-  }, [eventId])
+  }, [eventId, tr])
 
-  if (!eventId) return <div>Missing event.</div>
+  if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
     <div className="space-y-6">
@@ -88,28 +95,38 @@ export function EventPage() {
             to={`/events/${eventId}/register`}
             className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white"
           >
-            Registration
+            {tr({ en: 'Registration', pt: 'Inscrição' })}
           </Link>
           <Link
             to={`/events/${eventId}/results`}
             className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold"
           >
-            Live results
+            {tr({ en: 'Live results', pt: 'Resultados ao vivo' })}
           </Link>
           <Link
             to={`/events/${eventId}/projector`}
             className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold"
           >
-            Projector board
+            {tr({ en: 'Projector board', pt: 'Painel (projetor)' })}
           </Link>
         </div>
       </section>
 
       <section className="rounded-lg border border-zinc-200 bg-white p-5">
-        <h2 className="text-lg font-bold">Event info</h2>
+        <h2 className="text-lg font-bold">{tr({ en: 'Event info', pt: 'Informações do evento' })}</h2>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-800">
-          <li>Schedule, parking, toilets, and sponsors are configured per event.</li>
-          <li>Race Mode is offline-first; download your race package before start.</li>
+          <li>
+            {tr({
+              en: 'Schedule, parking, toilets, and sponsors are configured per event.',
+              pt: 'Horários, estacionamento, banheiros e patrocinadores são configurados por evento.',
+            })}
+          </li>
+          <li>
+            {tr({
+              en: 'Race Mode is offline-first; download your race package before start.',
+              pt: 'O Race Mode é offline-first; baixe seu pacote de prova antes do Start.',
+            })}
+          </li>
         </ul>
       </section>
     </div>

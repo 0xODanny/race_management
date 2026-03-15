@@ -9,6 +9,7 @@ import { useWakeLock } from '../../hooks/useWakeLock'
 import { useBattery } from '../../hooks/useBattery'
 import { Button } from '../../ui/Button'
 import { setActiveSessionId, updateLocalSession } from '../../offline/raceRepo'
+import { useI18n } from '../../i18n/i18n'
 
 function formatTimer(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -30,6 +31,7 @@ export function RaceModePage() {
   const nav = useNavigate()
   const sync = useSync()
   const battery = useBattery()
+  const { tr } = useI18n()
 
   const pkg = useRaceStore((s) => s.activePackage)
   const session = useRaceStore((s) => s.activeSession)
@@ -136,7 +138,7 @@ export function RaceModePage() {
       return
     }
 
-    const ok = window.confirm('Exit Race Mode?')
+    const ok = window.confirm(tr({ en: 'Exit Race Mode?', pt: 'Sair do Race Mode?' }))
     if (!ok) return
 
     const next = { ...session, active: false }
@@ -172,11 +174,16 @@ export function RaceModePage() {
   if (!pkg || !session) {
     return (
       <div className="rounded-lg border border-zinc-200 bg-white p-5">
-        <div className="text-lg font-bold">Race mode</div>
-        <div className="mt-2 text-sm text-zinc-700">Load your Bib QR first from the dashboard.</div>
+        <div className="text-lg font-bold">{tr({ en: 'Race mode', pt: 'Race Mode' })}</div>
+        <div className="mt-2 text-sm text-zinc-700">
+          {tr({
+            en: 'Load your Bib QR first from the dashboard.',
+            pt: 'Carregue primeiro seu Bib QR no painel.',
+          })}
+        </div>
         <div className="mt-4">
           <Button variant="secondary" onClick={() => nav('/athlete')}>
-            Back
+            {tr({ en: 'Back', pt: 'Voltar' })}
           </Button>
         </div>
       </div>
@@ -231,10 +238,12 @@ export function RaceModePage() {
           <div className="mt-2 text-5xl font-extrabold tabular-nums">{formatTimer(timerMs)}</div>
           <div className="mt-3 flex items-center justify-between text-sm">
             <div className="text-white/80">
-              Last valid: <span className="font-bold text-white">{lastValid?.checkpointCode ?? '—'}</span>
+              {tr({ en: 'Last valid:', pt: 'Último válido:' })}{' '}
+              <span className="font-bold text-white">{lastValid?.checkpointCode ?? '—'}</span>
             </div>
             <div className="text-white/80">
-              Next: <span className="font-bold text-white">{expectedNext?.code ?? '—'}</span>
+              {tr({ en: 'Next:', pt: 'Próximo:' })}{' '}
+              <span className="font-bold text-white">{expectedNext?.code ?? '—'}</span>
             </div>
           </div>
           <div className="mt-3">
@@ -242,7 +251,7 @@ export function RaceModePage() {
               <div className="h-2 rounded-full bg-lime-400" style={{ width: `${progressPct}%` }} />
             </div>
             <div className="mt-1 text-xs text-white/60">
-              Progress: {completedCount}/{totalCheckpoints} ({progressPct}%)
+              {tr({ en: 'Progress:', pt: 'Progresso:' })} {completedCount}/{totalCheckpoints} ({progressPct}%)
             </div>
           </div>
         </div>
@@ -285,15 +294,21 @@ export function RaceModePage() {
               className="w-full bg-white/10 text-white hover:bg-white/15"
               onClick={() =>
                 window.alert(
-                  `Scan order is enforced.\n\nNext required checkpoint: ${expectedNext?.code ?? '—'}\n\nIf you scan a wrong or early checkpoint, it will be rejected and logged.`,
+                  tr({
+                    en: `Scan order is enforced.\n\nNext required Checkpoint: ${expectedNext?.code ?? '—'}\n\nIf you scan a wrong or early Checkpoint, it will be rejected and logged.`,
+                    pt: `A ordem de scans é aplicada.\n\nPróximo Checkpoint obrigatório: ${expectedNext?.code ?? '—'}\n\nSe você escanear um Checkpoint errado ou adiantado, ele será rejeitado e registrado.`,
+                  }),
                 )
               }
             >
-              Help
+              {tr({ en: 'Help', pt: 'Ajuda' })}
             </Button>
           </div>
           <div className="text-center text-xs text-white/50">
-            Offline-first: scans are saved immediately and synced later.
+            {tr({
+              en: 'Offline-first: scans are saved immediately and synced later.',
+              pt: 'Offline-first: os scans são salvos na hora e sincronizados depois.',
+            })}
           </div>
         </div>
       </div>
@@ -302,19 +317,22 @@ export function RaceModePage() {
         <div className="absolute inset-0 bg-black/95 p-4">
           <div className="mx-auto flex h-full max-w-xl flex-col">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-bold">Scan QR</div>
+              <div className="text-sm font-bold">{tr({ en: 'Scan QR', pt: 'Escanear QR' })}</div>
               <button
                 className="rounded-md border border-white/20 bg-white/5 px-3 py-1 text-sm"
                 onClick={() => setScanning(false)}
               >
-                Close
+                {tr({ en: 'Close', pt: 'Fechar' })}
               </button>
             </div>
             <div className="mt-4">
               <QrScanner active={scanning} onScan={onDecoded} onError={() => {}} />
             </div>
             <div className="mt-4 text-xs text-white/60">
-              Tip: keep the QR centered and steady. The camera may take a moment in bright sunlight.
+              {tr({
+                en: 'Tip: keep the QR centered and steady. The camera may take a moment in bright sunlight.',
+                pt: 'Dica: mantenha o QR centralizado e firme. A câmera pode demorar um pouco sob sol forte.',
+              })}
             </div>
           </div>
         </div>

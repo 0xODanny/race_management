@@ -2,8 +2,10 @@ import { Link, Outlet } from 'react-router-dom'
 import { AutoResumeRace } from '../components/AutoResumeRace'
 import { isTestModeEnabled, isTrialModeEnabled, reloadApp, setTestModeEnabled, setTrialModeEnabled } from '../../lib/demoMode'
 import { BackNav } from '../components/BackNav'
+import { LanguageToggle, useI18n } from '../../i18n/i18n'
 
 export function PublicLayout() {
+  const { tr } = useI18n()
   const showDemoButtons = import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
   const testOn = isTestModeEnabled()
   const trialOn = isTrialModeEnabled()
@@ -31,7 +33,7 @@ export function PublicLayout() {
                     reloadApp()
                   }}
                 >
-                  Test mode
+                  {tr({ en: 'Test mode', pt: 'Modo teste' })}
                 </button>
                 <button
                   className={
@@ -44,15 +46,16 @@ export function PublicLayout() {
                     reloadApp()
                   }}
                 >
-                  Race trial
+                  {tr({ en: 'Race trial', pt: 'Demo de corrida' })}
                 </button>
               </>
             ) : null}
+            <LanguageToggle />
             <Link to="/how" className="hover:underline">
-              How it works
+              {tr({ en: 'How it works', pt: 'Como funciona' })}
             </Link>
             <Link to="/login" className="hover:underline">
-              Athlete login
+              {tr({ en: 'Athlete login', pt: 'Login do atleta' })}
             </Link>
           </nav>
         </div>

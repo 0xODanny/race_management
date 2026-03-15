@@ -3,9 +3,11 @@ import { useAuth } from '../../auth/AuthProvider'
 import { AutoResumeRace } from '../components/AutoResumeRace'
 import { isTestModeEnabled, isTrialModeEnabled, reloadApp, setTestModeEnabled, setTrialModeEnabled } from '../../lib/demoMode'
 import { BackNav } from '../components/BackNav'
+import { LanguageToggle, useI18n } from '../../i18n/i18n'
 
 export function AppLayout() {
   const auth = useAuth()
+  const { tr } = useI18n()
   const showDemoButtons = import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
   const testOn = isTestModeEnabled()
   const trialOn = isTrialModeEnabled()
@@ -16,7 +18,7 @@ export function AppLayout() {
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
           <Link to="/athlete" className="text-sm font-bold tracking-wide">
-            DASHBOARD
+            {tr({ en: 'DASHBOARD', pt: 'PAINEL' })}
           </Link>
           <div className="flex items-center gap-3 text-sm">
             {showDemoButtons ? (
@@ -34,7 +36,7 @@ export function AppLayout() {
                   }}
                   title="Unlock all pages locally"
                 >
-                  Test mode
+                  {tr({ en: 'Test mode', pt: 'Modo teste' })}
                 </button>
                 <button
                   className={
@@ -48,25 +50,26 @@ export function AppLayout() {
                   }}
                   title="Populate demo races and sample data"
                 >
-                  Race trial
+                  {tr({ en: 'Race trial', pt: 'Demo de corrida' })}
                 </button>
               </>
             ) : null}
+            <LanguageToggle />
             <Link to="/race" className="hover:underline">
-              Race mode
+              {tr({ en: 'Race mode', pt: 'Race Mode' })}
             </Link>
             <button
               className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm"
               onClick={() => void auth.signOut()}
             >
-              Sign out
+              {tr({ en: 'Sign out', pt: 'Sair' })}
             </button>
           </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5">
         <BackNav />
-        {auth.loading ? <div>Loading…</div> : <Outlet />}
+        {auth.loading ? <div>{tr({ en: 'Loading…', pt: 'Carregando…' })}</div> : <Outlet />}
       </main>
     </div>
   )
