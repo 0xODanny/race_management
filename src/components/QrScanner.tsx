@@ -14,6 +14,7 @@ export function QrScanner(props: {
     if (!props.active) return
 
     let stopped = false
+    let started = false
     const qr = new Html5Qrcode(regionIdRef.current)
     qrRef.current = qr
 
@@ -33,6 +34,7 @@ export function QrScanner(props: {
             props.onError?.(typeof err === 'string' ? err : 'Scan error')
           },
         )
+        started = true
         setReady(true)
       } catch (e) {
         props.onError?.(e instanceof Error ? e.message : 'Camera start failed')
@@ -44,16 +46,26 @@ export function QrScanner(props: {
     return () => {
       stopped = true
       setReady(false)
-      qr
-        .stop()
-        .catch(() => {})
-        .finally(() => {
-          try {
-            qr.clear()
-          } catch {
-            // best-effort
-          }
-        })
+
+      const clear = () => {
+        try {
+          qr.clear()
+        } catch {
+          // best-effort
+        }
+      }
+
+      if (!started) {
+        clear()
+        return
+      }
+
+      try {
+        const p = qr.stop()
+        p.catch(() => {}).finally(clear)
+      } catch {
+        clear()
+      }
     }
   }, [props.active])
 
