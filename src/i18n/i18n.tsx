@@ -61,19 +61,30 @@ export function useI18n(): I18nApi {
 export function LanguageToggle() {
   const { lang, setLang } = useI18n()
   const isPt = lang === 'pt-BR'
+  const common = 'h-8 w-10 rounded-md text-base leading-none'
+  const active = 'bg-black text-white'
+  const inactive = 'bg-white text-zinc-900 hover:bg-zinc-50'
 
   return (
-    <button
-      type="button"
-      className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-sm font-semibold"
-      onClick={() => setLang(isPt ? 'en' : 'pt-BR')}
-      aria-label={isPt ? 'Switch language to English' : 'Trocar idioma para Português (Brasil)'}
-      title={isPt ? 'English' : 'Português (Brasil)'}
-    >
-      <span aria-hidden className="text-base leading-none">
-        {isPt ? '🇧🇷' : '🇺🇸'}
-      </span>
-      <span className="text-xs">{isPt ? 'POR' : 'ENG'}</span>
-    </button>
+    <div className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white p-1">
+      <button
+        type="button"
+        className={common + ' ' + (isPt ? active : inactive)}
+        onClick={() => setLang('pt-BR')}
+        aria-label="Português (Brasil)"
+        title="Português (Brasil)"
+      >
+        🇧🇷
+      </button>
+      <button
+        type="button"
+        className={common + ' ' + (!isPt ? active : inactive)}
+        onClick={() => setLang('en')}
+        aria-label="English"
+        title="English"
+      >
+        🇺🇸
+      </button>
+    </div>
   )
 }

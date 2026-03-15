@@ -164,12 +164,12 @@ export function RaceModePage() {
   }
 
   const syncStatus = !navigator.onLine
-    ? 'OFFLINE'
+    ? tr({ en: 'OFFLINE', pt: 'OFFLINE' })
     : sync.syncing
-      ? 'SYNCING'
+      ? tr({ en: 'SYNCING', pt: 'SINCRONIZANDO' })
       : sync.lastError
-        ? 'SYNC ERR'
-        : 'OK'
+        ? tr({ en: 'SYNC ERR', pt: 'ERRO SYNC' })
+        : tr({ en: 'OK', pt: 'OK' })
 
   if (!pkg || !session) {
     return (
@@ -218,21 +218,23 @@ export function RaceModePage() {
           </div>
           <div className="text-right text-xs text-white/70">
             <div>
-              Battery: <span className="font-semibold text-white">{pct(battery.level)}</span>
-              {battery.charging ? <span className="ml-1">(charging)</span> : null}
+              {tr({ en: 'Battery:', pt: 'Bateria:' })}{' '}
+              <span className="font-semibold text-white">{pct(battery.level)}</span>
+              {battery.charging ? <span className="ml-1">({tr({ en: 'charging', pt: 'carregando' })})</span> : null}
             </div>
             <div>
               Sync: <span className="font-semibold text-white">{syncStatus}</span>
             </div>
             <div>
-              Wake lock: <span className="font-semibold text-white">{wakeSupported ? 'ON*' : 'N/A'}</span>
+              {tr({ en: 'Wake lock:', pt: 'Wake lock:' })}{' '}
+              <span className="font-semibold text-white">{wakeSupported ? tr({ en: 'ON*', pt: 'ON*' }) : tr({ en: 'N/A', pt: 'N/A' })}</span>
             </div>
           </div>
         </div>
 
         <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-white/70">RACE STATUS</div>
+            <div className="text-xs text-white/70">{tr({ en: 'RACE STATUS', pt: 'STATUS' })}</div>
             <div className="text-xs font-bold tracking-wide">{session.status.toUpperCase()}</div>
           </div>
           <div className="mt-2 text-5xl font-extrabold tabular-nums">{formatTimer(timerMs)}</div>
@@ -277,7 +279,7 @@ export function RaceModePage() {
             className="w-full bg-white text-black hover:bg-zinc-200"
             onClick={() => setScanning(true)}
           >
-            SCAN QR
+            {tr({ en: 'SCAN QR', pt: 'ESCANEAR QR' })}
           </Button>
           <div className="grid grid-cols-2 gap-3">
             <Button
@@ -286,7 +288,7 @@ export function RaceModePage() {
               className="w-full bg-white/10 text-white hover:bg-white/15"
               onClick={() => void sync.triggerSync()}
             >
-              Sync
+              {tr({ en: 'Sync', pt: 'Sync' })}
             </Button>
             <Button
               variant="secondary"

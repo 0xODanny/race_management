@@ -49,12 +49,20 @@ export function BackNav() {
   const target = getBackTarget(loc.pathname)
   if (!target) return null
 
+  const targetLabel = (() => {
+    if (target.label === 'Home') return tr({ en: 'Home', pt: 'Início' })
+    if (target.label === 'Dashboard') return tr({ en: 'Dashboard', pt: 'Painel' })
+    if (target.label === 'Results') return tr({ en: 'Results', pt: 'Resultados' })
+    if (target.label === 'Event') return tr({ en: 'Event', pt: 'Evento' })
+    return target.label
+  })()
+
   return (
     <div className="mb-4">
       <Link
         to={target.to}
         className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900"
-        aria-label={tr({ en: `Back to ${target.label}`, pt: `Voltar para ${target.label}` })}
+        aria-label={tr({ en: `Back to ${targetLabel}`, pt: `Voltar para ${targetLabel}` })}
       >
         <span aria-hidden>←</span>
         {tr({ en: 'Back', pt: 'Voltar' })}

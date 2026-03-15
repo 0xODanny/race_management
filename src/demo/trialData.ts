@@ -1,7 +1,9 @@
 export type DemoEvent = {
   id: string
   title: string
+  title_pt?: string
   description: string
+  description_pt?: string
   location: string
   start_date: string
   status: 'scheduled' | 'live' | 'completed'
@@ -56,8 +58,11 @@ export const demoEvents: DemoEvent[] = [
   {
     id: 'demo-bra-florianopolis-10k',
     title: 'Floripa Coastal 10K (Demo)',
+    title_pt: 'Floripa Coastal 10K (Demo)',
     description:
       'A fast coastal course along the waterfront. Demo event used to preview app layouts and live results.',
+    description_pt:
+      'Um percurso rápido e costeiro ao longo da orla. Evento demo para visualizar layouts do app e resultados ao vivo.',
     location: 'Florianópolis, Santa Catarina, Brazil',
     start_date: isoDate(d0),
     status: 'scheduled',
@@ -65,8 +70,11 @@ export const demoEvents: DemoEvent[] = [
   {
     id: 'demo-bra-serra-trail-21k',
     title: 'Serra do Mar Trail 21K (Demo)',
+    title_pt: 'Serra do Mar Trail 21K (Demo)',
     description:
       'Technical forest trail with strict checkpoint order. Demo event includes participants, check-in, and sample results.',
+    description_pt:
+      'Trilha técnica em mata com ordem estrita de Checkpoints. Evento demo inclui participantes, check-in e resultados de exemplo.',
     location: 'Curitiba, Paraná, Brazil',
     start_date: isoDate(d1),
     status: 'live',
@@ -74,13 +82,26 @@ export const demoEvents: DemoEvent[] = [
   {
     id: 'demo-bra-chapada-ultra-55k',
     title: 'Chapada Ultra 55K (Demo)',
+    title_pt: 'Chapada Ultra 55K (Demo)',
     description:
       'Highland ultra with multiple anchor checkpoints. Demo event shows leaderboard and projector board layouts.',
+    description_pt:
+      'Ultra em altitude com múltiplos anchors. Evento demo mostra o leaderboard e o painel (projetor).',
     location: 'Chapada dos Veadeiros, Goiás, Brazil',
     start_date: isoDate(d2),
     status: 'scheduled',
   },
 ]
+
+export function getDemoEventText(event: DemoEvent, lang: 'en' | 'pt-BR') {
+  if (lang === 'pt-BR') {
+    return {
+      title: event.title_pt ?? event.title,
+      description: event.description_pt ?? event.description,
+    }
+  }
+  return { title: event.title, description: event.description }
+}
 
 export function getDemoEvent(eventId: string): DemoEvent | null {
   return demoEvents.find((e) => e.id === eventId) ?? null

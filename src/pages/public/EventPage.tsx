@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
 import { isTrialModeEnabled } from '../../lib/demoMode'
-import { getDemoEvent } from '../../demo/trialData'
+import { getDemoEvent, getDemoEventText } from '../../demo/trialData'
 import { useI18n } from '../../i18n/i18n'
 
 type EventRow = {
@@ -16,9 +16,18 @@ type EventRow = {
 
 export function EventPage() {
   const { eventId } = useParams()
-  const { tr } = useI18n()
+  const { tr, lang } = useI18n()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  function formatStatus(status: string | null | undefined): string {
+    const v = (status ?? '').toLowerCase()
+    if (v === 'scheduled') return tr({ en: 'scheduled', pt: 'agendado' })
+    if (v === 'live') return tr({ en: 'live', pt: 'ao vivo' })
+    if (v === 'completed') return tr({ en: 'completed', pt: 'concluído' })
+    if (!status) return tr({ en: 'unknown', pt: 'desconhecido' })
+    return status
+  }
 
   useEffect(() => {
     if (!eventId) return
@@ -32,10 +41,11 @@ export function EventPage() {
           setEvent(null)
           setError(tr({ en: 'Demo event not found', pt: 'Evento demo não encontrado' }))
         } else {
+          const text = getDemoEventText(e, lang)
           setEvent({
             id: e.id,
-            title: e.title,
-            description: e.description,
+            title: text.title,
+            description: text.description,
             location: e.location,
             start_date: e.start_date,
             status: e.status,
@@ -69,7 +79,7 @@ export function EventPage() {
     return () => {
       cancelled = true
     }
-  }, [eventId, tr])
+  }, [eventId, tr, lang])
 
   if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
@@ -83,7 +93,9 @@ export function EventPage() {
               {event?.start_date ?? ''} {event?.location ? `• ${event.location}` : ''}
             </div>
           </div>
-          <div className="text-right text-xs text-zinc-600">Status: {event?.status ?? 'unknown'}</div>
+          <div className="text-right text-xs text-zinc-600">
+            {tr({ en: 'Status:', pt: 'Status:' })} {formatStatus(event?.status)}
+          </div>
         </div>
 
         {error ? <div className="mt-3 text-sm text-red-700">{error}</div> : null}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
 import { isTrialModeEnabled } from '../../lib/demoMode'
-import { demoEvents } from '../../demo/trialData'
+import { demoEvents, getDemoEventText } from '../../demo/trialData'
 import { useI18n } from '../../i18n/i18n'
 
 type EventRow = {
@@ -14,7 +14,7 @@ type EventRow = {
 }
 
 export function HomePage() {
-  const { tr } = useI18n()
+  const { tr, lang } = useI18n()
   const [events, setEvents] = useState<EventRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,13 +29,16 @@ export function HomePage() {
 
       if (trial) {
         setEvents(
-          demoEvents.map((e) => ({
-            id: e.id,
-            title: e.title,
+          demoEvents.map((e) => {
+            const text = getDemoEventText(e, lang)
+            return {
+              id: e.id,
+              title: text.title,
             location: e.location,
             start_date: e.start_date,
             status: e.status,
-          })),
+            }
+          }),
         )
         setLoading(false)
         return
@@ -72,7 +75,7 @@ export function HomePage() {
     return () => {
       cancelled = true
     }
-  }, [trial, tr])
+  }, [trial, tr, lang])
 
   return (
     <div className="space-y-6">
