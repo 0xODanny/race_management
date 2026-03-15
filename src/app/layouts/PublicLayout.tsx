@@ -1,6 +1,7 @@
 import { Link, Outlet } from 'react-router-dom'
 import { AutoResumeRace } from '../components/AutoResumeRace'
 import { isTestModeEnabled, isTrialModeEnabled, reloadApp, setTestModeEnabled, setTrialModeEnabled } from '../../lib/demoMode'
+import { BackNav } from '../components/BackNav'
 
 export function PublicLayout() {
   const showDemoButtons = import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
@@ -57,6 +58,7 @@ export function PublicLayout() {
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
+        <BackNav />
         <Outlet />
       </main>
     </div>

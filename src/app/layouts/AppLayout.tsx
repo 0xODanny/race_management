@@ -2,6 +2,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { AutoResumeRace } from '../components/AutoResumeRace'
 import { isTestModeEnabled, isTrialModeEnabled, reloadApp, setTestModeEnabled, setTrialModeEnabled } from '../../lib/demoMode'
+import { BackNav } from '../components/BackNav'
 
 export function AppLayout() {
   const auth = useAuth()
@@ -64,6 +65,7 @@ export function AppLayout() {
         </div>
       </header>
       <main className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5">
+        <BackNav />
         {auth.loading ? <div>Loading…</div> : <Outlet />}
       </main>
     </div>
