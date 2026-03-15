@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { getSupabaseOrNull } from '../../lib/supabase'
+import { isTrialModeEnabled } from '../../lib/demoMode'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { Label } from '../../ui/Label'
@@ -45,6 +46,11 @@ export function RegisterPage() {
     setSuccess(null)
 
     try {
+      if (isTrialModeEnabled()) {
+        setSuccess('Demo registration saved (local). You can now preview staff check-in and race-day pages.')
+        return
+      }
+
       const supabase = getSupabaseOrNull()
       if (!supabase) throw new Error('Supabase is not configured for registration.')
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
+import { isTrialModeEnabled } from '../../lib/demoMode'
+import { getDemoEvent } from '../../demo/trialData'
 
 type EventRow = {
   id: string
@@ -21,6 +23,24 @@ export function EventPage() {
     let cancelled = false
     async function load() {
       setError(null)
+
+      if (isTrialModeEnabled()) {
+        const e = getDemoEvent(eventId!)
+        if (!e) {
+          setEvent(null)
+          setError('Demo event not found')
+        } else {
+          setEvent({
+            id: e.id,
+            title: e.title,
+            description: e.description,
+            location: e.location,
+            start_date: e.start_date,
+            status: e.status,
+          })
+        }
+        return
+      }
 
       const supabase = getSupabaseOrNull()
       if (!supabase) {

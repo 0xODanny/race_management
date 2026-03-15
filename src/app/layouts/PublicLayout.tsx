@@ -1,7 +1,12 @@
 import { Link, Outlet } from 'react-router-dom'
 import { AutoResumeRace } from '../components/AutoResumeRace'
+import { isTestModeEnabled, isTrialModeEnabled, reloadApp, setTestModeEnabled, setTrialModeEnabled } from '../../lib/demoMode'
 
 export function PublicLayout() {
+  const showDemoButtons = import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
+  const testOn = isTestModeEnabled()
+  const trialOn = isTrialModeEnabled()
+
   return (
     <div className="min-h-full bg-white text-zinc-900">
       <AutoResumeRace />
@@ -11,6 +16,37 @@ export function PublicLayout() {
             RACE
           </Link>
           <nav className="flex items-center gap-4 text-sm">
+            {showDemoButtons ? (
+              <>
+                <button
+                  className={
+                    testOn
+                      ? 'rounded-md bg-black px-3 py-1 text-sm font-semibold text-white'
+                      : 'rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm'
+                  }
+                  onClick={() => {
+                    setTestModeEnabled(!testOn)
+                    if (trialOn && testOn) setTrialModeEnabled(false)
+                    reloadApp()
+                  }}
+                >
+                  Test mode
+                </button>
+                <button
+                  className={
+                    trialOn
+                      ? 'rounded-md bg-black px-3 py-1 text-sm font-semibold text-white'
+                      : 'rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm'
+                  }
+                  onClick={() => {
+                    setTrialModeEnabled(!trialOn)
+                    reloadApp()
+                  }}
+                >
+                  Race trial
+                </button>
+              </>
+            ) : null}
             <Link to="/how" className="hover:underline">
               How it works
             </Link>

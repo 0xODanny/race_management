@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
+import { isTrialModeEnabled } from '../../lib/demoMode'
+import { getDemoResults } from '../../demo/trialData'
 
 type ResultRow = {
   id: string
@@ -45,6 +47,12 @@ export function LiveResultsPage() {
 
     async function load() {
       setError(null)
+
+      if (isTrialModeEnabled()) {
+        setRows(getDemoResults(eventId!) as any)
+        return
+      }
+
       const supabase = getSupabaseOrNull()
       if (!supabase) {
         setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load results.')
@@ -70,6 +78,8 @@ export function LiveResultsPage() {
     }
 
     void load()
+
+    if (isTrialModeEnabled()) return
 
     const supabase = getSupabaseOrNull()
     if (!supabase) return

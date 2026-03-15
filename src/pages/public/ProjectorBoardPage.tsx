@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
+import { isTrialModeEnabled } from '../../lib/demoMode'
+import { getDemoResults } from '../../demo/trialData'
 
 type ResultRow = {
   id: string
@@ -45,6 +47,12 @@ export function ProjectorBoardPage() {
 
     async function load() {
       setError(null)
+
+      if (isTrialModeEnabled()) {
+        setRows(getDemoResults(eventId!) as any)
+        return
+      }
+
       const supabase = getSupabaseOrNull()
       if (!supabase) {
         setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load results.')
@@ -80,6 +88,8 @@ export function ProjectorBoardPage() {
     }
 
     void load()
+
+    if (isTrialModeEnabled()) return
 
     const supabase = getSupabaseOrNull()
     if (!supabase) return

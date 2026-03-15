@@ -3,6 +3,7 @@ import type { RacePackage, RaceSessionLocal, ScanEventLocal } from '../race/mode
 import { getDeviceId } from '../lib/device'
 import { decodeAndVerifySignedQr } from '../lib/qr'
 import { applyCheckpointScan, findCheckpoint } from '../race/routeEngine'
+import { isTrialModeEnabled } from '../lib/demoMode'
 import {
   addScanEvent,
   createLocalSession,
@@ -44,6 +45,166 @@ export const useRaceStore = create<RaceStoreState>((set, get) => ({
   hydrate: async () => {
     const activeId = await getActiveSessionId()
     if (!activeId) {
+      if (isTrialModeEnabled()) {
+        const now = Date.now()
+        const eventId = 'demo-bra-serra-trail-21k'
+        const localSessionId = 'trial_ls_1'
+
+        const pkg: RacePackage = {
+          eventId,
+          eventTitle: 'Serra do Mar Trail 21K (Demo)',
+          stageType: 'qualifier',
+          athlete: { athleteId: 'trial_athlete_1', fullName: 'Demo Athlete', email: 'admin@admin.com' },
+          bib: { bibId: 'trial_bib_101', bibNumber: '101' },
+          route: {
+            eventId,
+            routeId: 'trial_route_1',
+            routeCode: 'BRA-21K-A',
+            strictOrder: true,
+            stages: [
+              {
+                stageNo: 1,
+                stageType: 'anchor',
+                stageCode: '1',
+                checkpoints: [
+                  { checkpointId: 'cp_start', code: 'START', name: 'Start', kind: 'start' },
+                  { checkpointId: 'cp1', code: 'CP1', name: 'Checkpoint 1', kind: 'checkpoint' },
+                  { checkpointId: 'cp2', code: 'CP2', name: 'Checkpoint 2', kind: 'checkpoint' },
+                  { checkpointId: 'cp3', code: 'CP3', name: 'Checkpoint 3', kind: 'checkpoint' },
+                  { checkpointId: 'cp4', code: 'CP4', name: 'Checkpoint 4', kind: 'checkpoint' },
+                  { checkpointId: 'cp_fin', code: 'FIN', name: 'Finish', kind: 'finish' },
+                ],
+              },
+            ],
+          },
+          downloadedAt: now,
+        }
+
+        const startedAt = now - (1 * 3600_000 + 37 * 60_000 + 44_000)
+        const finishedAt = now - 12_000
+        const session: RaceSessionLocal = {
+          localSessionId,
+          eventId,
+          athleteId: pkg.athlete.athleteId,
+          bibId: pkg.bib.bibId,
+          routeId: pkg.route.routeId,
+          deviceId: getDeviceId(),
+          status: 'official',
+          startedAtDevice: startedAt,
+          finishedAtDevice: finishedAt,
+          progress: {
+            stageIndex: 1,
+            checkpointIndex: 6,
+            completedCheckpointIds: ['cp_start', 'cp1', 'cp2', 'cp3', 'cp4', 'cp_fin'],
+          },
+          active: false,
+          createdAt: startedAt,
+          updatedAt: finishedAt,
+        }
+
+        const scans: ScanEventLocal[] = [
+          {
+            localScanId: 'trial_scan_start',
+            localSessionId,
+            eventId,
+            checkpointId: 'cp_start',
+            checkpointCode: 'START',
+            scannedAtDevice: startedAt,
+            qrRaw: 'DEMO',
+            qrType: 'start',
+            isValid: true,
+            validationReason: null,
+            expectedNextCheckpointId: 'cp1',
+            stageNo: 1,
+            synced: true,
+            createdAt: startedAt,
+          },
+          {
+            localScanId: 'trial_scan_cp1',
+            localSessionId,
+            eventId,
+            checkpointId: 'cp1',
+            checkpointCode: 'CP1',
+            scannedAtDevice: startedAt + 12 * 60_000,
+            qrRaw: 'DEMO',
+            qrType: 'checkpoint',
+            isValid: true,
+            validationReason: null,
+            expectedNextCheckpointId: 'cp2',
+            stageNo: 1,
+            synced: true,
+            createdAt: startedAt + 12 * 60_000,
+          },
+          {
+            localScanId: 'trial_scan_cp2',
+            localSessionId,
+            eventId,
+            checkpointId: 'cp2',
+            checkpointCode: 'CP2',
+            scannedAtDevice: startedAt + 25 * 60_000,
+            qrRaw: 'DEMO',
+            qrType: 'checkpoint',
+            isValid: true,
+            validationReason: null,
+            expectedNextCheckpointId: 'cp3',
+            stageNo: 1,
+            synced: true,
+            createdAt: startedAt + 25 * 60_000,
+          },
+          {
+            localScanId: 'trial_scan_cp3',
+            localSessionId,
+            eventId,
+            checkpointId: 'cp3',
+            checkpointCode: 'CP3',
+            scannedAtDevice: startedAt + 38 * 60_000,
+            qrRaw: 'DEMO',
+            qrType: 'checkpoint',
+            isValid: true,
+            validationReason: null,
+            expectedNextCheckpointId: 'cp4',
+            stageNo: 1,
+            synced: true,
+            createdAt: startedAt + 38 * 60_000,
+          },
+          {
+            localScanId: 'trial_scan_cp4',
+            localSessionId,
+            eventId,
+            checkpointId: 'cp4',
+            checkpointCode: 'CP4',
+            scannedAtDevice: startedAt + 54 * 60_000,
+            qrRaw: 'DEMO',
+            qrType: 'checkpoint',
+            isValid: true,
+            validationReason: null,
+            expectedNextCheckpointId: 'cp_fin',
+            stageNo: 1,
+            synced: true,
+            createdAt: startedAt + 54 * 60_000,
+          },
+          {
+            localScanId: 'trial_scan_fin',
+            localSessionId,
+            eventId,
+            checkpointId: 'cp_fin',
+            checkpointCode: 'FIN',
+            scannedAtDevice: finishedAt,
+            qrRaw: 'DEMO',
+            qrType: 'finish',
+            isValid: true,
+            validationReason: null,
+            expectedNextCheckpointId: null,
+            stageNo: 1,
+            synced: true,
+            createdAt: finishedAt,
+          },
+        ]
+
+        set({ hydrated: true, activePackage: pkg, activeSession: session, scans })
+        return
+      }
+
       set({ hydrated: true })
       return
     }

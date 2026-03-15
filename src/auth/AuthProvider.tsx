@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { env, isSupabaseConfigured } from '../lib/env'
+import { isTestModeEnabled, isTrialModeEnabled } from '../lib/demoMode'
 import { getSupabase } from '../lib/supabase'
 import { readRoleFromMetadata, type UserRole } from './auth'
 
@@ -58,7 +59,8 @@ function writeLocalUser(user: AuthUser | null) {
 }
 
 export function AuthProvider(props: { children: React.ReactNode }) {
-  const useLocal = env.localAuthEnabled || !isSupabaseConfigured()
+  const forceLocal = isTestModeEnabled() || isTrialModeEnabled()
+  const useLocal = env.localAuthEnabled || !isSupabaseConfigured() || forceLocal
   const [user, setUser] = useState<AuthUser | null>(null)
   const [role, setRole] = useState<UserRole | null>(null)
   const [loading, setLoading] = useState(true)
@@ -76,7 +78,7 @@ export function AuthProvider(props: { children: React.ReactNode }) {
     }
 
     // Optional auto-admin for easy localhost verification.
-    const auto = env.localAuthAutoAdmin || (import.meta.env.DEV && env.localAuthEnabled)
+    const auto = forceLocal || env.localAuthAutoAdmin || (import.meta.env.DEV && env.localAuthEnabled)
     if (auto) {
       const u: AuthUser = { id: 'local_admin', email: LOCAL_ADMIN_EMAIL, user_metadata: { role: 'admin' } }
       writeLocalUser(u)

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getSupabaseOrNull } from '../../lib/supabase'
+import { isTrialModeEnabled } from '../../lib/demoMode'
+import { getDemoCheckInRows, toggleDemoCheckIn } from '../../demo/trialData'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 
@@ -36,6 +38,12 @@ export function CheckInPage() {
       setLoading(true)
       setError(null)
 
+      if (isTrialModeEnabled()) {
+        setRows(getDemoCheckInRows(eventId!) as any)
+        setLoading(false)
+        return
+      }
+
       const supabase = getSupabaseOrNull()
       if (!supabase) {
         setError('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load staff check-in.')
@@ -67,6 +75,12 @@ export function CheckInPage() {
 
   async function toggleCheckIn(registrationId: string, checkedIn: boolean) {
     try {
+      if (isTrialModeEnabled()) {
+        const next = toggleDemoCheckIn(registrationId)
+        setRows((prev) => prev.map((r) => (r.registration_id === registrationId ? { ...r, checked_in: next } : r)))
+        return
+      }
+
       const supabase = getSupabaseOrNull()
       if (!supabase) throw new Error('Supabase is not configured.')
 
