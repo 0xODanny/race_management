@@ -199,7 +199,7 @@ export function RaceModePage() {
         X
       </button>
 
-      <div className="mx-auto flex h-full max-w-xl flex-col px-4 py-4">
+      <div className="mx-auto flex h-full w-full max-w-md flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs text-white/70">ATHLETE</div>

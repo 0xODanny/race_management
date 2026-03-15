@@ -12,6 +12,7 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
 /* Prevent iOS overscroll glow + reduce accidental zoom */

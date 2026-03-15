@@ -6,10 +6,10 @@ export function AppLayout() {
   const auth = useAuth()
 
   return (
-    <div className="min-h-full bg-zinc-50 text-zinc-900">
+    <div className="min-h-dvh bg-zinc-50 text-zinc-900">
       <AutoResumeRace />
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
           <Link to="/athlete" className="text-sm font-bold tracking-wide">
             DASHBOARD
           </Link>
@@ -26,7 +26,7 @@ export function AppLayout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">
+      <main className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5">
         {auth.loading ? <div>Loading…</div> : <Outlet />}
       </main>
     </div>

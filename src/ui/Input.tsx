@@ -6,7 +6,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       className={clsx(
-        'w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-black',
+        'w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-base outline-none focus:border-black',
         className,
       )}
       {...rest}
