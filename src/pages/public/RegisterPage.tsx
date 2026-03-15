@@ -8,25 +8,62 @@ import { Input } from '../../ui/Input'
 import { Label } from '../../ui/Label'
 import { useI18n } from '../../i18n/i18n'
 
-type Sex = 'F' | 'M' | 'X'
+type Sex = 'F' | 'M'
+
+type AgeBracket = 'U19' | '20-29' | '30-39' | '40-49' | '50-59' | '60-69' | '70+'
+
+function toDigitsOnly(raw: string): string {
+  return raw.replace(/\D+/g, '')
+}
+
+function hasAtLeastTwoWords(name: string): boolean {
+  return name.trim().split(/\s+/).filter(Boolean).length >= 2
+}
+
+function isValidPhoneDigits(countryCode: '+55' | '+1', digits: string): boolean {
+  const d = toDigitsOnly(digits)
+  if (countryCode === '+55') return /^\d{10,11}$/.test(d)
+  if (countryCode === '+1') return /^\d{10}$/.test(d)
+  return false
+}
 
 export function RegisterPage() {
   const { eventId } = useParams()
   const auth = useAuth()
-  const { tr } = useI18n()
+  const { tr, lang } = useI18n()
 
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [birthdate, setBirthdate] = useState('')
-  const [sex, setSex] = useState<Sex>('X')
-  const [categoryId, setCategoryId] = useState('')
+  const [sex, setSex] = useState<Sex>('M')
+  const [ageBracket, setAgeBracket] = useState<AgeBracket | ''>('')
   const [emergencyName, setEmergencyName] = useState('')
-  const [emergencyPhone, setEmergencyPhone] = useState('')
+  const [emergencyCountryCode, setEmergencyCountryCode] = useState<'+55' | '+1'>(() => (lang === 'pt-BR' ? '+55' : '+1'))
+  const [emergencyPhoneDigits, setEmergencyPhoneDigits] = useState('')
   const [waiverAccepted, setWaiverAccepted] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  const ageOptions: Array<{ value: AgeBracket; label: string }> = useMemo(
+    () => [
+      { value: 'U19', label: tr({ en: 'Under 19', pt: 'Abaixo de 19' }) },
+      { value: '20-29', label: tr({ en: '20–29', pt: '20–29' }) },
+      { value: '30-39', label: tr({ en: '30–39', pt: '30–39' }) },
+      { value: '40-49', label: tr({ en: '40–49', pt: '40–49' }) },
+      { value: '50-59', label: tr({ en: '50–59', pt: '50–59' }) },
+      { value: '60-69', label: tr({ en: '60–69', pt: '60–69' }) },
+      { value: '70+', label: tr({ en: '70+', pt: '70+' }) },
+    ],
+    [tr],
+  )
+
+  const emergencyNameOk = useMemo(() => hasAtLeastTwoWords(emergencyName), [emergencyName])
+  const emergencyPhoneOk = useMemo(
+    () => isValidPhoneDigits(emergencyCountryCode, emergencyPhoneDigits),
+    [emergencyCountryCode, emergencyPhoneDigits],
+  )
 
   const canSubmit = useMemo(() => {
     if (!eventId) return false
@@ -35,11 +72,12 @@ export function RegisterPage() {
       fullName.trim().length >= 2 &&
       phone.trim().length >= 6 &&
       birthdate.length === 10 &&
-      emergencyName.trim().length >= 2 &&
-      emergencyPhone.trim().length >= 6 &&
+      ageBracket !== '' &&
+      emergencyNameOk &&
+      emergencyPhoneOk &&
       waiverAccepted
     )
-  }, [auth.user, birthdate, emergencyName, emergencyPhone, eventId, fullName, phone, waiverAccepted])
+  }, [ageBracket, auth.user, birthdate, emergencyNameOk, emergencyPhoneOk, eventId, fullName, phone, waiverAccepted])
 
   async function submit() {
     if (!eventId) return
@@ -74,8 +112,8 @@ export function RegisterPage() {
           phone,
           birthdate,
           sex,
-          categoryId: categoryId || null,
-          emergencyContact: { name: emergencyName, phone: emergencyPhone },
+          categoryId: ageBracket ? `${sex}-${ageBracket}` : null,
+          emergencyContact: { name: emergencyName.trim(), phone: `${emergencyCountryCode}${toDigitsOnly(emergencyPhoneDigits)}` },
           waiverAccepted,
         },
       })
@@ -137,24 +175,22 @@ export function RegisterPage() {
             >
               <option value="F">F</option>
               <option value="M">M</option>
-              <option value="X">X</option>
             </select>
           </div>
           <div>
-            <Label>{tr({ en: 'Category (optional)', pt: 'Categoria (opcional)' })}</Label>
-            <Input
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              placeholder={tr({ en: 'Category ID', pt: 'ID da categoria' })}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <div className="mt-2 text-xs text-zinc-600">
-              {tr({
-                en: 'Categories are normally selected from the event list; this MVP uses a simple field.',
-                pt: 'Normalmente as categorias são selecionadas na lista do evento; neste MVP usamos um campo simples.',
-              })}
-            </div>
+            <Label>{tr({ en: 'Age category', pt: 'Categoria por idade' })}</Label>
+            <select
+              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-black"
+              value={ageBracket}
+              onChange={(e) => setAgeBracket(e.target.value as any)}
+            >
+              <option value="">{tr({ en: 'Select…', pt: 'Selecione…' })}</option>
+              {ageOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -163,11 +199,51 @@ export function RegisterPage() {
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             <div>
               <Label>{tr({ en: 'Name', pt: 'Nome' })}</Label>
-              <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} />
+              <Input
+                value={emergencyName}
+                onChange={(e) => setEmergencyName(e.target.value)}
+                placeholder={tr({ en: 'First Last', pt: 'Nome Sobrenome' })}
+              />
+              {!emergencyNameOk && emergencyName.trim().length ? (
+                <div className="mt-1 text-xs text-zinc-600">
+                  {tr({
+                    en: 'Enter at least first and last name.',
+                    pt: 'Informe pelo menos nome e sobrenome.',
+                  })}
+                </div>
+              ) : null}
             </div>
             <div>
               <Label>{tr({ en: 'Phone', pt: 'Telefone' })}</Label>
-              <Input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
+              <div className="flex gap-2">
+                <select
+                  className="w-[7.5rem] rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-black"
+                  value={emergencyCountryCode}
+                  onChange={(e) => setEmergencyCountryCode(e.target.value as any)}
+                >
+                  <option value="+55">🇧🇷 +55</option>
+                  <option value="+1">🇺🇸 +1</option>
+                </select>
+                <Input
+                  value={emergencyPhoneDigits}
+                  onChange={(e) => setEmergencyPhoneDigits(toDigitsOnly(e.target.value))}
+                  inputMode="numeric"
+                  placeholder={emergencyCountryCode === '+55' ? '12991938407' : '4155551234'}
+                />
+              </div>
+              {!emergencyPhoneOk && emergencyPhoneDigits.trim().length ? (
+                <div className="mt-1 text-xs text-zinc-600">
+                  {emergencyCountryCode === '+55'
+                    ? tr({
+                        en: 'Use 10–11 digits (e.g., 12991938407).',
+                        pt: 'Use 10–11 dígitos (ex.: 12991938407).',
+                      })
+                    : tr({
+                        en: 'Use 10 digits (e.g., 4155551234).',
+                        pt: 'Use 10 dígitos (ex.: 4155551234).',
+                      })}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
