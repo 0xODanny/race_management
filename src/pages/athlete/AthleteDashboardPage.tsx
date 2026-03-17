@@ -4,6 +4,7 @@ import { QrScanner } from '../../components/QrScanner'
 import { useRaceStore } from '../../state/raceStore'
 import { Button } from '../../ui/Button'
 import { useI18n } from '../../i18n/i18n'
+import { isTestModeEnabled, isTrialModeEnabled } from '../../lib/demoMode'
 
 export function AthleteDashboardPage() {
   const nav = useNavigate()
@@ -11,13 +12,18 @@ export function AthleteDashboardPage() {
   const pkg = useRaceStore((s) => s.activePackage)
   const session = useRaceStore((s) => s.activeSession)
   const loadByBib = useRaceStore((s) => s.loadPackageFromServerByBibQr)
+  const loadDemoRacePackage = useRaceStore((s) => s.loadDemoRacePackage)
   const startOrResume = useRaceStore((s) => s.startOrResumeSession)
 
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const showDemo = import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
 
   async function onBibScan(raw: string) {
     setScanning(false)
+    if (!pkg && showDemo) {
+      await loadDemoRacePackage()
+    }
     setError(null)
     const r = await loadByBib(raw)
     if (!r.ok) setError(r.error)
@@ -70,6 +76,18 @@ export function AthleteDashboardPage() {
         ) : (
           <div className="mt-3 text-sm text-zinc-700">{tr({ en: 'No race package loaded.', pt: 'Nenhum pacote de prova carregado.' })}</div>
         )}
+          {showDemo && !pkg ? (
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                setError(null)
+                await loadDemoRacePackage()
+              }}
+              title="Load a demo package on localhost without scanning"
+            >
+              {tr({ en: 'Load demo race (no QR)', pt: 'Carregar demo (sem QR)' })}
+            </Button>
+          ) : null}
 
         <div className="mt-5 flex flex-wrap gap-3">
           <Button variant="secondary" onClick={() => setScanning((v) => !v)}>
@@ -81,6 +99,12 @@ export function AthleteDashboardPage() {
             {tr({ en: 'Enter Race Mode', pt: 'Entrar no Race Mode' })}
           </Button>
           <Button variant="secondary" onClick={() => nav('/athlete/course')} disabled={!pkg}>
+        <div className="mt-4 text-xs text-zinc-600">
+          {tr({
+            en: 'Bib QR loads your assigned route and bib number into this device for offline Race Mode.',
+            pt: 'O Bib QR carrega sua rota atribuída e o número do bib neste dispositivo para o Race Mode offline.',
+          })}
+        </div>
             {tr({ en: 'View Course Info', pt: 'Ver informações do percurso' })}
           </Button>
           <Button variant="secondary" onClick={() => nav('/athlete/results')} disabled={!pkg}>

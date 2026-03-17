@@ -11,6 +11,10 @@ import { Button } from '../../ui/Button'
 import { setActiveSessionId, updateLocalSession } from '../../offline/raceRepo'
 import { useI18n } from '../../i18n/i18n'
 
+type FlashState =
+  | { kind: 'ok'; title: string; message?: string }
+  | { kind: 'error'; title: string; message: string }
+
 function formatTimer(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(total / 3600)
@@ -43,6 +47,8 @@ export function RaceModePage() {
 
   const [scanning, setScanning] = useState(false)
   const [now, setNow] = useState(Date.now())
+  const [flash, setFlash] = useState<FlashState | null>(null)
+  const flashTimerRef = useRef<number | null>(null)
 
   const { supported: wakeSupported } = useWakeLock(!!session && (session.status === 'racing' || session.status === 'finished_validating'))
 
@@ -59,6 +65,20 @@ export function RaceModePage() {
     return getExpectedNext(pkg.route, session.progress)
   }, [pkg, session])
 
+  const orderedCheckpoints = useMemo(() => {
+    if (!pkg) return []
+    return pkg.route.stages.flatMap((stage) =>
+      stage.checkpoints.map((cp) => ({
+        checkpointId: cp.checkpointId,
+        code: cp.code,
+        name: cp.name,
+        kind: cp.kind,
+        stageNo: stage.stageNo,
+        stageCode: stage.stageCode,
+      })),
+    )
+  }, [pkg])
+
   const lastValid = useMemo(() => {
     const v = scans.filter((s) => s.isValid)
     return v.length ? v[v.length - 1] : null
@@ -69,6 +89,14 @@ export function RaceModePage() {
     const end = session.finishedAtDevice ?? now
     return end - session.startedAtDevice
   }, [now, session?.finishedAtDevice, session?.startedAtDevice])
+
+  const timeOfDay = useMemo(() => {
+    try {
+      return new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    } catch {
+      return ''
+    }
+  }, [now])
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 100)
@@ -119,6 +147,88 @@ export function RaceModePage() {
     }
   }, [feedback, clearFeedback])
 
+  function localizeScanError(params: { message: string; expected?: string }) {
+    const { message, expected } = params
+    if (expected) {
+      return tr({
+        en: `Not correct checkpoint read — you need checkpoint ${expected}.`,
+        pt: `Checkpoint incorreto — você precisa do checkpoint ${expected}.`,
+      })
+    }
+
+    const map: Record<string, { en: string; pt: string }> = {
+      'Wrong event QR': { en: 'Wrong event QR', pt: 'QR do evento errado' },
+      'Bib QR is not allowed in Race Mode': {
+        en: 'Bib QR is not allowed in Race Mode',
+        pt: 'QR de Bib não é permitido no Race Mode',
+      },
+      'Checkpoint QR missing checkpointId': {
+        en: 'Checkpoint QR is missing checkpointId',
+        pt: 'QR do checkpoint sem checkpointId',
+      },
+      'Already scanned': { en: 'Already scanned', pt: 'Já escaneado' },
+      'Route is already complete': { en: 'Route is already complete', pt: 'A rota já foi concluída' },
+      'Invalid checkpoint': { en: 'Invalid checkpoint', pt: 'Checkpoint inválido' },
+      'Unrecognized QR format': { en: 'Unrecognized QR format', pt: 'Formato de QR não reconhecido' },
+      'Invalid QR signature': { en: 'Invalid QR signature', pt: 'Assinatura do QR inválida' },
+      'Unsupported QR version': { en: 'Unsupported QR version', pt: 'Versão do QR não suportada' },
+      'Malformed QR payload': { en: 'Malformed QR payload', pt: 'Conteúdo do QR inválido' },
+    }
+
+    const translated = map[message]
+    if (translated) return tr(translated)
+    return message
+  }
+
+  function triggerFlash(next: FlashState, ms: number) {
+    if (flashTimerRef.current != null) {
+      window.clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = null
+    }
+    setFlash(next)
+    flashTimerRef.current = window.setTimeout(() => {
+      flashTimerRef.current = null
+      setFlash(null)
+    }, ms)
+  }
+
+  // Full-screen visual confirmation (green) / rejection (red).
+  const lastFlashKeyRef = useRef<string>('')
+  useEffect(() => {
+    if (!feedback) return
+    const expected = feedback.kind === 'error' ? (feedback.expected ?? '') : ''
+    const nextHint = feedback.kind === 'ok' ? (feedback.nextHint ?? '') : ''
+    const key = `${feedback.kind}:${feedback.message}:${expected}:${nextHint}`
+    if (key === lastFlashKeyRef.current) return
+    lastFlashKeyRef.current = key
+
+    if (feedback.kind === 'ok') {
+      triggerFlash(
+        {
+          kind: 'ok',
+          title: tr({ en: 'CONFIRMED', pt: 'CONFIRMADO' }),
+          message: feedback.message,
+        },
+        2000,
+      )
+    } else {
+      triggerFlash(
+        {
+          kind: 'error',
+          title: tr({ en: 'ERROR', pt: 'ERRO' }),
+          message: localizeScanError({ message: feedback.message, expected: feedback.expected }),
+        },
+        2000,
+      )
+    }
+  }, [feedback, tr])
+
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current)
+    }
+  }, [])
+
   useEffect(() => {
     // Ensure session exists when opening race mode.
     if (!pkg) return
@@ -130,6 +240,31 @@ export function RaceModePage() {
     setScanning(false)
     await handleScan(raw)
     void sync.triggerSync()
+  }
+
+  const lastScannerErrorAtRef = useRef<number>(0)
+  function onScannerError(message: string) {
+    const now = Date.now()
+    if (now - lastScannerErrorAtRef.current < 1800) return
+    lastScannerErrorAtRef.current = now
+
+    // Camera / decode failures that don't produce a valid QR.
+    vibrateError()
+    void beepError()
+    triggerFlash(
+      {
+        kind: 'error',
+        title: tr({ en: 'ERROR', pt: 'ERRO' }),
+        message:
+          message && message.trim()
+            ? tr({
+                en: `Unable to read QR. ${message}`,
+                pt: `Não foi possível ler o QR. ${message}`,
+              })
+            : tr({ en: 'Unable to read QR. Try again.', pt: 'Não foi possível ler o QR. Tente novamente.' }),
+      },
+      2000,
+    )
   }
 
   async function exitRaceMode() {
@@ -192,8 +327,28 @@ export function RaceModePage() {
 
   const showScanner = scanning
 
+  const completed = new Set(session.progress.completedCheckpointIds)
+  const nextId = expectedNext?.checkpointId ?? null
+
   return (
     <div className="fixed inset-0 z-50 bg-black text-white">
+      {flash ? (
+        <div
+          className={
+            'absolute inset-0 z-[60] flex items-center justify-center px-6 text-center ' +
+            (flash.kind === 'ok' ? 'bg-lime-400 text-black' : 'bg-red-600 text-white')
+          }
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="max-w-md">
+            <div className="text-4xl font-extrabold tracking-tight">{flash.title}</div>
+            {flash.message ? <div className="mt-3 text-lg font-semibold leading-snug">{flash.message}</div> : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* Tiny hard-to-hit exit */}
       <button
         onPointerDown={onExitDown}
@@ -248,6 +403,9 @@ export function RaceModePage() {
               <span className="font-bold text-white">{expectedNext?.code ?? '—'}</span>
             </div>
           </div>
+          <div className="mt-2 text-xs text-white/60">
+            {tr({ en: 'Time of day:', pt: 'Hora:' })} <span className="font-semibold text-white/90">{timeOfDay || '—'}</span>
+          </div>
           <div className="mt-3">
             <div className="h-2 w-full rounded-full bg-white/10">
               <div className="h-2 rounded-full bg-lime-400" style={{ width: `${progressPct}%` }} />
@@ -258,22 +416,74 @@ export function RaceModePage() {
           </div>
         </div>
 
-        {feedback ? (
-          <div
-            className={
-              'mt-4 rounded-lg p-4 text-center text-lg font-extrabold ' +
-              (feedback.kind === 'ok' ? 'bg-lime-400/20 text-lime-100' : 'bg-red-500/20 text-red-100')
-            }
-          >
-            <div className="text-2xl">{feedback.kind === 'ok' ? 'CONFIRMED' : 'ERROR'}</div>
-            <div className="mt-1">{feedback.message}</div>
-            {feedback.kind === 'ok' && feedback.nextHint ? (
-              <div className="mt-2 text-base text-white/90">{feedback.nextHint}</div>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="mt-4 flex-1 overflow-y-auto">
+          {feedback ? (
+            <div
+              className={
+                'rounded-lg p-4 text-center text-lg font-extrabold ' +
+                (feedback.kind === 'ok' ? 'bg-lime-400/20 text-lime-100' : 'bg-red-500/20 text-red-100')
+              }
+            >
+              <div className="text-2xl">{feedback.kind === 'ok' ? 'CONFIRMED' : 'ERROR'}</div>
+              <div className="mt-1">{feedback.message}</div>
+              {feedback.kind === 'ok' && feedback.nextHint ? (
+                <div className="mt-2 text-base text-white/90">{feedback.nextHint}</div>
+              ) : null}
+            </div>
+          ) : null}
 
-        <div className="mt-auto grid gap-3 pb-4">
+          <div className={(feedback ? 'mt-3 ' : '') + 'rounded-lg border border-white/10 bg-white/5 p-3'}>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs font-bold tracking-wide text-white/70">{tr({ en: 'CHECKPOINTS', pt: 'CHECKPOINTS' })}</div>
+              <div className="text-[11px] text-white/50">
+                {tr({ en: 'Next:', pt: 'Próximo:' })} <span className="font-semibold text-white/70">{expectedNext?.code ?? '—'}</span>
+              </div>
+            </div>
+            <div className="max-h-[32vh] overflow-y-auto rounded-md">
+              <div className="space-y-1">
+                {orderedCheckpoints.map((cp) => {
+                  const isDone = completed.has(cp.checkpointId)
+                  const isNext = !!nextId && cp.checkpointId === nextId
+                  const rowClass = isNext
+                    ? 'border border-white/20 bg-white/10'
+                    : isDone
+                      ? 'bg-white/0'
+                      : 'bg-white/0'
+
+                  return (
+                    <div key={cp.checkpointId} className={rowClass + ' flex items-center justify-between rounded-md px-2 py-2'}>
+                      <div className="min-w-0">
+                        <div className={"truncate text-sm font-semibold " + (isDone ? 'text-white' : 'text-white/85')}>
+                          {cp.code}
+                          {cp.name ? <span className="ml-2 text-xs font-normal text-white/60">{cp.name}</span> : null}
+                        </div>
+                        <div className="text-[11px] text-white/45">
+                          {tr({ en: 'Stage', pt: 'Etapa' })} {cp.stageCode}
+                          {cp.kind === 'start'
+                            ? ` • ${tr({ en: 'start', pt: 'largada' })}`
+                            : cp.kind === 'finish'
+                              ? ` • ${tr({ en: 'finish', pt: 'chegada' })}`
+                              : ''}
+                        </div>
+                      </div>
+                      <div className="ml-3 shrink-0 text-xs font-bold">
+                        {isDone ? (
+                          <span className="text-lime-300">✓</span>
+                        ) : isNext ? (
+                          <span className="text-white">{tr({ en: 'NEXT', pt: 'PRÓX' })}</span>
+                        ) : (
+                          <span className="text-white/35">•</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 pb-4">
           <Button
             size="lg"
             className="w-full bg-white text-black hover:bg-zinc-200"
@@ -328,7 +538,7 @@ export function RaceModePage() {
               </button>
             </div>
             <div className="mt-4">
-              <QrScanner active={scanning} onScan={onDecoded} onError={() => {}} />
+              <QrScanner active={scanning} onScan={onDecoded} onError={onScannerError} />
             </div>
             <div className="mt-4 text-xs text-white/60">
               {tr({

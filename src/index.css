@@ -6,6 +6,16 @@ html,
 body,
 #root {
   height: 100%;
+  min-height: 100dvh;
+}
+
+/* iOS PWA/home-screen height fix (older Safari/iOS variants) */
+@supports (-webkit-touch-callout: none) {
+  html,
+  body,
+  #root {
+    min-height: -webkit-fill-available;
+  }
 }
 
 body {

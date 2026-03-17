@@ -111,17 +111,24 @@ export function LiveResultsPage() {
   if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{tr({ en: 'Live results', pt: 'Resultados ao vivo' })}</h1>
-        <Link to={`/events/${eventId}/projector`} className="text-sm underline">
-          {tr({ en: 'Projector mode', pt: 'Modo projetor' })}
-        </Link>
-      </div>
+    <div className="space-y-6">
+      <section className="rounded-lg border border-zinc-200 bg-white p-5">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold">{tr({ en: 'Live results', pt: 'Resultados ao vivo' })}</h1>
+          <Link to={`/events/${eventId}/projector`} className="text-sm underline">
+            {tr({ en: 'Projector mode', pt: 'Modo projetor' })}
+          </Link>
+        </div>
+        <div className="mt-2 text-sm text-zinc-700">
+          {tr({
+            en: 'Provisional results update live; official results appear after validation.',
+            pt: 'Resultados provisionais atualizam ao vivo; resultados oficiais aparecem após validação.',
+          })}
+        </div>
+        {error ? <div className="mt-3 text-sm text-red-700">{error}</div> : null}
+      </section>
 
-      {error ? <div className="text-sm text-red-700">{error}</div> : null}
-
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+      <section className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50">
             <tr>
@@ -155,7 +162,7 @@ export function LiveResultsPage() {
             ) : null}
           </tbody>
         </table>
-      </div>
+      </section>
     </div>
   )
 }

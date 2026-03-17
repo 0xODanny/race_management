@@ -106,9 +106,18 @@ export function CheckInPage() {
   if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">{tr({ en: 'Staff check-in', pt: 'Check-in da equipe' })}</h1>
-      <div className="rounded-lg border border-zinc-200 bg-white p-4">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-zinc-200 bg-white p-5">
+        <h1 className="text-2xl font-bold">{tr({ en: 'Staff check-in', pt: 'Check-in da equipe' })}</h1>
+        <div className="mt-2 text-sm text-zinc-700">
+          {tr({
+            en: 'Search for an athlete and mark check-in status.',
+            pt: 'Busque um atleta e marque o status de check-in.',
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-zinc-200 bg-white p-4">
         <div className="text-sm font-semibold">{tr({ en: 'Search athlete', pt: 'Buscar atleta' })}</div>
         <div className="mt-2">
           <Input
@@ -123,12 +132,12 @@ export function CheckInPage() {
             pt: 'A atribuição de bibs é feita nas ferramentas de admin neste MVP.',
           })}
         </div>
-      </div>
+      </section>
 
       {error ? <div className="text-sm text-red-700">{error}</div> : null}
       {loading ? <div className="text-sm">{tr({ en: 'Loading…', pt: 'Carregando…' })}</div> : null}
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+      <section className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50">
             <tr>
@@ -163,7 +172,7 @@ export function CheckInPage() {
             ) : null}
           </tbody>
         </table>
-      </div>
+      </section>
     </div>
   )
 }

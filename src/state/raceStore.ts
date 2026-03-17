@@ -20,6 +20,39 @@ export type RaceUiFeedback =
   | { kind: 'ok'; message: string; nextHint?: string }
   | { kind: 'error'; message: string; expected?: string; nextHint?: string }
 
+function buildDemoRacePackage(now: number): RacePackage {
+  const eventId = 'demo-bra-serra-trail-21k'
+  return {
+    eventId,
+    eventTitle: 'Serra do Mar Trail 21K (Demo)',
+    stageType: 'qualifier',
+    athlete: { athleteId: 'trial_athlete_1', fullName: 'Demo Athlete', email: 'admin@admin.com' },
+    bib: { bibId: 'trial_bib_101', bibNumber: '101' },
+    route: {
+      eventId,
+      routeId: 'trial_route_1',
+      routeCode: 'BRA-21K-A',
+      strictOrder: true,
+      stages: [
+        {
+          stageNo: 1,
+          stageType: 'anchor',
+          stageCode: '1',
+          checkpoints: [
+            { checkpointId: 'cp_start', code: 'START', name: 'Start', kind: 'start' },
+            { checkpointId: 'cp1', code: 'CP1', name: 'Checkpoint 1', kind: 'checkpoint' },
+            { checkpointId: 'cp2', code: 'CP2', name: 'Checkpoint 2', kind: 'checkpoint' },
+            { checkpointId: 'cp3', code: 'CP3', name: 'Checkpoint 3', kind: 'checkpoint' },
+            { checkpointId: 'cp4', code: 'CP4', name: 'Checkpoint 4', kind: 'checkpoint' },
+            { checkpointId: 'cp_fin', code: 'FIN', name: 'Finish', kind: 'finish' },
+          ],
+        },
+      ],
+    },
+    downloadedAt: now,
+  }
+}
+
 type RaceStoreState = {
   hydrated: boolean
   activePackage: RacePackage | null
@@ -29,6 +62,8 @@ type RaceStoreState = {
 
   hydrate: () => Promise<void>
   clearFeedback: () => void
+
+  loadDemoRacePackage: () => Promise<void>
 
   loadPackageFromServerByBibQr: (rawQr: string) => Promise<{ ok: true } | { ok: false; error: string }>
   startOrResumeSession: () => Promise<{ ok: true } | { ok: false; error: string }>
@@ -49,36 +84,7 @@ export const useRaceStore = create<RaceStoreState>((set, get) => ({
         const now = Date.now()
         const eventId = 'demo-bra-serra-trail-21k'
         const localSessionId = 'trial_ls_1'
-
-        const pkg: RacePackage = {
-          eventId,
-          eventTitle: 'Serra do Mar Trail 21K (Demo)',
-          stageType: 'qualifier',
-          athlete: { athleteId: 'trial_athlete_1', fullName: 'Demo Athlete', email: 'admin@admin.com' },
-          bib: { bibId: 'trial_bib_101', bibNumber: '101' },
-          route: {
-            eventId,
-            routeId: 'trial_route_1',
-            routeCode: 'BRA-21K-A',
-            strictOrder: true,
-            stages: [
-              {
-                stageNo: 1,
-                stageType: 'anchor',
-                stageCode: '1',
-                checkpoints: [
-                  { checkpointId: 'cp_start', code: 'START', name: 'Start', kind: 'start' },
-                  { checkpointId: 'cp1', code: 'CP1', name: 'Checkpoint 1', kind: 'checkpoint' },
-                  { checkpointId: 'cp2', code: 'CP2', name: 'Checkpoint 2', kind: 'checkpoint' },
-                  { checkpointId: 'cp3', code: 'CP3', name: 'Checkpoint 3', kind: 'checkpoint' },
-                  { checkpointId: 'cp4', code: 'CP4', name: 'Checkpoint 4', kind: 'checkpoint' },
-                  { checkpointId: 'cp_fin', code: 'FIN', name: 'Finish', kind: 'finish' },
-                ],
-              },
-            ],
-          },
-          downloadedAt: now,
-        }
+        const pkg = buildDemoRacePackage(now)
 
         const startedAt = now - (1 * 3600_000 + 37 * 60_000 + 44_000)
         const finishedAt = now - 12_000
@@ -222,6 +228,17 @@ export const useRaceStore = create<RaceStoreState>((set, get) => ({
   },
 
   clearFeedback: () => set({ feedback: null }),
+
+  loadDemoRacePackage: async () => {
+    const now = Date.now()
+    const pkg = buildDemoRacePackage(now)
+    try {
+      await saveRacePackage(pkg)
+    } catch {
+      // best-effort
+    }
+    set({ activePackage: pkg })
+  },
 
   loadPackageFromServerByBibQr: async (rawQr) => {
     const decoded = decodeAndVerifySignedQr(rawQr)
