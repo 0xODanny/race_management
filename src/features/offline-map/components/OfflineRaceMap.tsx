@@ -156,6 +156,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const rafRef = useRef<number | null>(null)
   const initTimeoutRef = useRef<number | null>(null)
   const tileTimeoutRef = useRef<number | null>(null)
+  const debugProbeTimeoutRef = useRef<number | null>(null)
 
   const [mapInitError, setMapInitError] = useState<string | null>(null)
 
@@ -172,6 +173,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     tilesLoaded: boolean | null
     styleLoaded: boolean | null
     canvas: string
+    view: string
+    container: string
     lastProbe: string | null
   } | null>(null)
 
@@ -226,34 +229,43 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   }, [props.eventId])
 
   // Keep the map canvas sized correctly (especially important in mobile Safari/Chrome and during layout changes).
+  // Attach observer independent of map init timing; callback is a no-op until mapRef exists.
   useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const map = mapRef.current
-    if (!map) return
-
     let rafId: number | null = null
-    const ro = new ResizeObserver(() => {
-      if (rafId) window.cancelAnimationFrame(rafId)
-      rafId = window.requestAnimationFrame(() => {
-        try {
-          if (isMapUsable(mapRef.current)) mapRef.current.resize()
-        } catch {
-          // ignore
-        }
-      })
-    })
+    let ro: ResizeObserver | null = null
 
-    ro.observe(el)
+    const attach = () => {
+      const el = containerRef.current
+      if (!el) {
+        rafId = window.requestAnimationFrame(attach)
+        return
+      }
+
+      ro = new ResizeObserver(() => {
+        if (rafId) window.cancelAnimationFrame(rafId)
+        rafId = window.requestAnimationFrame(() => {
+          try {
+            if (isMapUsable(mapRef.current)) mapRef.current.resize()
+          } catch {
+            // ignore
+          }
+        })
+      })
+
+      ro.observe(el)
+    }
+
+    rafId = window.requestAnimationFrame(attach)
     return () => {
+      if (rafId) window.cancelAnimationFrame(rafId)
       try {
-        ro.disconnect()
+        ro?.disconnect()
       } catch {
         // ignore
       }
-      if (rafId) window.cancelAnimationFrame(rafId)
+      ro = null
     }
-  }, [pkg])
+  }, [])
 
   // Init map
   useEffect(() => {
@@ -417,6 +429,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                             tilesLoaded: null,
                             styleLoaded: null,
                             canvas: 'unknown',
+                            view: 'unknown',
+                            container: 'unknown',
                             lastProbe: `probe: ${res.status} ${ct || 'no-ct'} ${blob.size} bytes (not image)`,
                           },
                     )
@@ -440,6 +454,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                             tilesLoaded: null,
                             styleLoaded: null,
                             canvas: 'unknown',
+                            view: 'unknown',
+                            container: 'unknown',
                             lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (too small)`,
                           },
                     )
@@ -462,6 +478,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                           tilesLoaded: null,
                           styleLoaded: null,
                           canvas: 'unknown',
+                          view: 'unknown',
+                          container: 'unknown',
                           lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (image ok)`,
                         },
                   )
@@ -498,6 +516,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             if (!isMapUsable(m)) return
             try {
               const canvas = m.getCanvas()
+              const container = containerRef.current
+              const contRect = container?.getBoundingClientRect()
               const mm = m as unknown as {
                 loaded?: () => unknown
                 areTilesLoaded?: () => unknown
@@ -508,6 +528,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                 tilesLoaded: typeof mm.areTilesLoaded === 'function' ? !!mm.areTilesLoaded() : null,
                 styleLoaded: typeof mm.isStyleLoaded === 'function' ? !!mm.isStyleLoaded() : null,
                 canvas: `${canvas.clientWidth}x${canvas.clientHeight} css, ${canvas.width}x${canvas.height} px`,
+                view: `z=${m.getZoom().toFixed(2)} center=${m.getCenter().lng.toFixed(5)},${m.getCenter().lat.toFixed(5)}`,
+                container: contRect ? `${Math.round(contRect.width)}x${Math.round(contRect.height)} rect` : 'unknown',
                 lastProbe: prev?.lastProbe ?? null,
               }))
             } catch {
@@ -526,6 +548,44 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
               // ignore
             }
           }
+
+          // Always do an explicit probe in debug mode, even if tilesLoaded is true.
+          // This proves whether the "200" responses are actually PNGs.
+          debugProbeTimeoutRef.current = window.setTimeout(() => {
+            const m = mapRef.current
+            if (!isMapUsable(m)) return
+            try {
+              const c = m.getCenter()
+              const z = Math.min(Math.max(pkgSnapshot.minZoom, Math.round(m.getZoom())), pkgSnapshot.maxZoom)
+              const { x, y } = approxTileXY(c.lat, c.lng, z)
+              const url = new URL(`/tiles/${z}/${x}/${y}.png?debugProbe=1&t=${Date.now()}`, window.location.href).toString()
+              void (async () => {
+                try {
+                  const res = await fetch(url, { cache: 'no-store' })
+                  const ct = (res.headers.get('content-type') || '').toLowerCase()
+                  const blob = await res.blob()
+                  setDebugInfo((prev) =>
+                    prev
+                      ? { ...prev, lastProbe: `probe: ${res.status} ${ct || 'no-ct'} ${blob.size} bytes` }
+                      : {
+                          mapLoaded: null,
+                          tilesLoaded: null,
+                          styleLoaded: null,
+                          canvas: 'unknown',
+                          view: 'unknown',
+                          container: 'unknown',
+                          lastProbe: `probe: ${res.status} ${ct || 'no-ct'} ${blob.size} bytes`,
+                        },
+                  )
+                } catch (e) {
+                  const msg = e instanceof Error ? e.message : 'probe error'
+                  setDebugInfo((prev) => (prev ? { ...prev, lastProbe: msg } : prev))
+                }
+              })()
+            } catch {
+              // ignore
+            }
+          }, 1600)
         }
 
         // Probe a tile to detect cases where `/tiles/...` returns non-image content
@@ -573,6 +633,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       if (tileTimeoutRef.current) {
         window.clearTimeout(tileTimeoutRef.current)
         tileTimeoutRef.current = null
+      }
+
+      if (debugProbeTimeoutRef.current) {
+        window.clearTimeout(debugProbeTimeoutRef.current)
+        debugProbeTimeoutRef.current = null
       }
 
       detachCanvasListeners?.()
@@ -851,7 +916,9 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             <div>
               loaded: {String(debugInfo.mapLoaded)} | style: {String(debugInfo.styleLoaded)} | tiles: {String(debugInfo.tilesLoaded)}
             </div>
+            <div>container: {debugInfo.container}</div>
             <div>canvas: {debugInfo.canvas}</div>
+            <div>{debugInfo.view}</div>
             <div>probe: {debugInfo.lastProbe ?? '—'}</div>
           </div>
         ) : null}
