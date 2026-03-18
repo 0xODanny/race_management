@@ -468,7 +468,7 @@ export function RaceModePage() {
         <div className="mt-4 grid gap-3 pb-4">
           <Button
             size="lg"
-            className="w-full bg-white text-black hover:bg-zinc-200"
+            className="w-full bg-white !text-black hover:bg-zinc-200"
             onClick={() => setScanning(true)}
           >
             {tr({ en: 'SCAN QR', pt: 'ESCANEAR QR' })}
@@ -477,7 +477,7 @@ export function RaceModePage() {
             <Button
               variant="secondary"
               size="lg"
-              className="w-full bg-white/10 text-white hover:bg-white/15"
+              className="w-full"
               onClick={() => void sync.triggerSync()}
             >
               {tr({ en: 'Sync', pt: 'Sync' })}
@@ -485,7 +485,7 @@ export function RaceModePage() {
             <Button
               variant="secondary"
               size="lg"
-              className="w-full bg-white/10 text-white hover:bg-white/15"
+              className="w-full"
               onClick={() => nav('/race/map')}
             >
               {tr({ en: 'Map', pt: 'Mapa' })}
@@ -493,7 +493,7 @@ export function RaceModePage() {
             <Button
               variant="secondary"
               size="lg"
-              className="w-full bg-white/10 text-white hover:bg-white/15"
+              className="w-full"
               onClick={() =>
                 window.alert(
                   tr({
