@@ -159,6 +159,10 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const debugProbeTimeoutRef = useRef<number | null>(null)
 
   const [mapInitError, setMapInitError] = useState<string | null>(null)
+  const mapInitErrorRef = useRef<string | null>(null)
+  useEffect(() => {
+    mapInitErrorRef.current = mapInitError
+  }, [mapInitError])
 
   const debugEnabled = useMemo(() => {
     try {
@@ -423,7 +427,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           } catch {
             // ignore
           }
-        }, 2500)
+        }, 6000)
 
         // Tile watchdog: catch the "white map, no errors" case.
         // If style loads but tiles never paint, probe a tile for the *current view*.
@@ -621,10 +625,28 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                 areTilesLoaded?: () => unknown
                 isStyleLoaded?: () => unknown
               }
+
+              const mapLoaded = typeof mm.loaded === 'function' ? !!mm.loaded() : null
+              const tilesLoaded = typeof mm.areTilesLoaded === 'function' ? !!mm.areTilesLoaded() : null
+              const styleLoaded = typeof mm.isStyleLoaded === 'function' ? !!mm.isStyleLoaded() : null
+
+              // If a watchdog fired early but the map later loads, clear the transient message.
+              // Keep real MapLibre errors.
+              const err = mapInitErrorRef.current
+              if (err && mapLoaded && styleLoaded && tilesLoaded) {
+                if (
+                  err.includes('Map did not finish loading') ||
+                  err.includes('Tiles are reachable') ||
+                  err.includes('Tiles estão acessíveis')
+                ) {
+                  setMapInitError(null)
+                }
+              }
+
               setDebugInfo((prev) => ({
-                mapLoaded: typeof mm.loaded === 'function' ? !!mm.loaded() : null,
-                tilesLoaded: typeof mm.areTilesLoaded === 'function' ? !!mm.areTilesLoaded() : null,
-                styleLoaded: typeof mm.isStyleLoaded === 'function' ? !!mm.isStyleLoaded() : null,
+                mapLoaded,
+                tilesLoaded,
+                styleLoaded,
                 canvas: `${canvas.clientWidth}x${canvas.clientHeight} css, ${canvas.width}x${canvas.height} px`,
                 canvasRect: `${Math.round(canvasRect.width)}x${Math.round(canvasRect.height)} rect @${Math.round(canvasRect.left)},${Math.round(canvasRect.top)}`,
                 canvasCss,
@@ -964,7 +986,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
   return (
     <div className={heightClass + ' relative flex flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white'}>
-      <div className="relative flex-1">
+      <div className="relative flex-1 min-h-0">
         <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2">
           <div className={'rounded-full px-3 py-1 text-xs font-bold ' + gpsBadgeClass}>
             {gpsBadge}
@@ -1016,8 +1038,10 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         </div>
 
         {/* Important: keep the MapLibre container free of React children.
-            React reconciliation can remove the map's injected canvas on re-render. */}
-        <div ref={containerRef} className="absolute inset-0 w-full bg-zinc-100" />
+          React reconciliation can remove the map's injected canvas on re-render.
+          Also: do NOT absolutely-position the container; we want it to participate in layout
+          so it never collapses to 0 height (a common cause of white/blank maps). */}
+        <div ref={containerRef} className="h-full w-full bg-zinc-100" />
 
         {debugEnabled && debugInfo ? (
           <div className="absolute bottom-3 left-3 z-10 max-w-[22rem] rounded-md border border-zinc-200 bg-white/95 p-2 text-[11px] font-semibold text-zinc-900">
