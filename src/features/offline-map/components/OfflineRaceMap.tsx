@@ -308,6 +308,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     let cancelled = false
     let detachCanvasListeners: (() => void) | null = null
     let detachDebug: (() => void) | null = null
+    let clearTransientErrorIfHealthy: (() => void) | null = null
 
     const hasWebGL = () => {
       try {
@@ -434,9 +435,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
         // Watchdog: if the map never loads, surface a helpful message.
         initTimeoutRef.current = window.setTimeout(() => {
-          if (!mapRef.current) return
+          if (!isMapUsable(mapRef.current)) return
           try {
-            if (!map.loaded?.()) {
+            // `loaded()` can remain false for a while even if the map is already painting.
+            // Only warn if the style itself isn't loaded.
+            const styleOk = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true
+            const loadedOk = typeof map.loaded === 'function' ? !!map.loaded() : true
+            if (!styleOk && !loadedOk) {
               setMapInitError(
                 tr({
                   en: 'Map did not finish loading. This is usually caused by blocked WebGL, blocked workers, or a GPU issue.',
@@ -447,7 +452,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           } catch {
             // ignore
           }
-        }, 6000)
+        }, 8000)
 
         // Tile watchdog: catch the "white map, no errors" case.
         // If style loads but tiles never paint, probe a tile for the *current view*.
@@ -578,6 +583,31 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         }, 4500)
 
         mapRef.current = map
+
+        // Auto-clear transient watchdog messages once we can tell the map is rendering.
+        clearTransientErrorIfHealthy = () => {
+          const err = mapInitErrorRef.current
+          if (!err) return
+          if (
+            !(
+              err.includes('Map did not finish loading') ||
+              err.includes('Tiles are reachable') ||
+              err.includes('Tiles estão acessíveis')
+            )
+          )
+            return
+
+          try {
+            const canvas = map.getCanvas()
+            const styleOk = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true
+            if (styleOk && canvas.width > 0 && canvas.height > 0) setMapInitError(null)
+          } catch {
+            // ignore
+          }
+        }
+
+        map.on('render', clearTransientErrorIfHealthy)
+        map.on('load', clearTransientErrorIfHealthy)
 
         if (debugEnabled) {
           const update = () => {
@@ -812,6 +842,14 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
       const map = mapRef.current
       try {
+        if (map && clearTransientErrorIfHealthy) {
+          try {
+            map.off('render', clearTransientErrorIfHealthy)
+            map.off('load', clearTransientErrorIfHealthy)
+          } catch {
+            // ignore
+          }
+        }
         map?.remove()
       } catch {
         // ignore
