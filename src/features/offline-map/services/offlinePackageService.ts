@@ -4,6 +4,8 @@ import type { BoundingBox, OfflineCheckpoint, OfflineEventMapPackage, OfflineRou
 import { getOfflineRaceProgress } from '../storage/offlineMapRepo'
 import { bboxCenter } from '../utils/geo'
 
+const OSM_TEMPLATE = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+
 function demoCenterForEvent(eventId: string) {
   if (eventId === 'demo-bra-florianopolis-10k') return { lat: -27.5949, lon: -48.5482 }
   if (eventId === 'demo-bra-serra-trail-21k') return { lat: -25.4284, lon: -49.2733 }
@@ -109,7 +111,7 @@ export async function fetchEventMapPackageMetadata(params: {
       tileManifest: {
         eventId: params.eventId,
         packageVersion: 'demo-1',
-        tileTemplateUrl: '/tiles/{z}/{x}/{y}.png',
+        tileTemplateUrl: OSM_TEMPLATE,
         tileFormat: 'png',
         minZoom,
         maxZoom,
