@@ -133,6 +133,9 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const { tr } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
+  const rafRef = useRef<number | null>(null)
+
+  const [mapInitError, setMapInitError] = useState<string | null>(null)
 
   const activePackage = useRaceStore((s) => s.activePackage)
   const activeSession = useRaceStore((s) => s.activeSession)
@@ -187,32 +190,89 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     if (!pkg) return
     if (mapRef.current) return
 
-    ensureMapLibreWorker()
+    setMapInitError(null)
+    let cancelled = false
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: buildRasterStyle(normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)),
-      center: toLngLat(pkg.center),
-      zoom: Math.min(Math.max(pkg.minZoom, 14), pkg.maxZoom),
-      minZoom: pkg.minZoom,
-      maxZoom: pkg.maxZoom,
-      attributionControl: false,
-    })
+    const hasWebGL = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+        return !!gl
+      } catch {
+        return false
+      }
+    }
 
-    map.on('error', (e: ErrorEvent) => {
-      // eslint-disable-next-line no-console
-      console.error('MapLibre error', e?.error ?? e)
-    })
+    const init = () => {
+      if (cancelled) return
+      const el = containerRef.current
+      if (!el) return
 
-    map.addControl(new maplibregl.AttributionControl({ compact: true }))
+      // Wait for layout: MapLibre can misbehave if container is 0x0.
+      if (el.clientWidth < 50 || el.clientHeight < 50) {
+        rafRef.current = window.requestAnimationFrame(init)
+        return
+      }
 
-    mapRef.current = map
+      if (!hasWebGL()) {
+        setMapInitError(
+          tr({
+            en: 'Map cannot load: WebGL is disabled/unavailable in this browser. Enable hardware acceleration (Chrome Settings → System) or try a different browser/device.',
+            pt: 'O mapa não pode carregar: WebGL está desativado/indisponível neste navegador. Ative a aceleração de hardware (Configurações do Chrome → Sistema) ou tente outro navegador/dispositivo.',
+          }),
+        )
+        return
+      }
+
+      ensureMapLibreWorker()
+
+      try {
+        const map = new maplibregl.Map({
+          container: el,
+          style: buildRasterStyle(normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)),
+          center: toLngLat(pkg.center),
+          zoom: Math.min(Math.max(pkg.minZoom, 14), pkg.maxZoom),
+          minZoom: pkg.minZoom,
+          maxZoom: pkg.maxZoom,
+          attributionControl: false,
+        })
+
+        map.addControl(new maplibregl.AttributionControl({ compact: true }))
+
+        map.on('error', (e: ErrorEvent) => {
+          // eslint-disable-next-line no-console
+          console.error('MapLibre error', e?.error ?? e)
+          const msg =
+            e?.error && typeof e.error === 'object' && 'message' in e.error
+              ? String((e.error as { message?: unknown }).message ?? '').trim()
+              : ''
+          if (msg) setMapInitError(msg)
+        })
+
+        mapRef.current = map
+      } catch (e) {
+        setMapInitError(e instanceof Error ? e.message : tr({ en: 'Map failed to initialize.', pt: 'Falha ao iniciar o mapa.' }))
+      }
+    }
+
+    rafRef.current = window.requestAnimationFrame(init)
 
     return () => {
-      map.remove()
+      cancelled = true
+      if (rafRef.current) {
+        window.cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+
+      const map = mapRef.current
+      try {
+        map?.remove()
+      } catch {
+        // ignore
+      }
       mapRef.current = null
     }
-  }, [pkg])
+  }, [pkg, tr])
 
   // Route layer
   useEffect(() => {
@@ -449,6 +509,12 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         {/* Important: keep the MapLibre container free of React children.
             React reconciliation can remove the map's injected canvas on re-render. */}
         <div ref={containerRef} className="absolute inset-0 w-full bg-zinc-100" />
+
+        {mapInitError ? (
+          <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm font-semibold text-zinc-800">
+            <div className="max-w-[26rem] rounded-lg border border-zinc-200 bg-white p-4">{mapInitError}</div>
+          </div>
+        ) : null}
 
         {!canShowMap ? (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-zinc-700">
