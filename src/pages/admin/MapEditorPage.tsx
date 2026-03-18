@@ -110,6 +110,7 @@ export function MapEditorPage() {
   const mapRef = useRef<maplibregl.Map | null>(null)
 
   const [mode, setMode] = useState<'start' | 'finish' | 'checkpoint' | 'pan'>('checkpoint')
+  const modeRef = useRef<'start' | 'finish' | 'checkpoint' | 'pan'>(mode)
   const [waymarks, setWaymarks] = useState<Waymark[]>([])
 
   const [placeQuery, setPlaceQuery] = useState('')
@@ -210,6 +211,10 @@ export function MapEditorPage() {
     }
   }
 
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
+
   const exportJson = useMemo(() => {
     if (!eventId) return ''
     const cps = toOfflineCheckpoints(eventId, waymarks)
@@ -260,17 +265,18 @@ export function MapEditorPage() {
     ro.observe(el)
 
     map.on('click', (e) => {
-      if (mode === 'pan') return
+      const currentMode = modeRef.current
+      if (currentMode === 'pan') return
 
       const lat = e.lngLat.lat
       const lon = e.lngLat.lng
 
       setWaymarks((prev) => {
-        if (mode === 'start') {
+        if (currentMode === 'start') {
           const rest = prev.filter((w) => w.type !== 'start')
           return [...rest, { id: 'start', code: 'START', type: 'start', lat, lon }]
         }
-        if (mode === 'finish') {
+        if (currentMode === 'finish') {
           const rest = prev.filter((w) => w.type !== 'finish')
           return [...rest, { id: 'finish', code: 'FIN', type: 'finish', lat, lon }]
         }
@@ -296,7 +302,7 @@ export function MapEditorPage() {
       }
       mapRef.current = null
     }
-  }, [mode])
+  }, [])
 
   useEffect(() => {
     const map = mapRef.current
