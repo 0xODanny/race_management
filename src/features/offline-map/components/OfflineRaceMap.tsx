@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import maplibregl, { type Map as MapLibreMap, type LngLatLike, type StyleSpecification } from 'maplibre-gl'
+import type { ErrorEvent, LngLatLike, Map as MapLibreMap, StyleSpecification } from 'maplibre-gl'
+import maplibregl from 'maplibre-gl/dist/maplibre-gl-csp'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { useRaceStore } from '../../../state/raceStore'
@@ -10,6 +11,14 @@ import { listOfflineCheckpoints, getOfflineEventPackage, getOfflineRoute } from 
 import { useGeolocation } from '../hooks/useGeolocation'
 import { offRouteWarning } from '../services/routeProximityService'
 import { normalizeTileTemplateUrl } from '../utils/tiles'
+
+let workerConfigured = false
+function ensureMapLibreWorker() {
+  if (workerConfigured) return
+  // CSP/Brave-friendly worker bundle (avoids blob/eval worker creation).
+  maplibregl.setWorkerUrl(new URL('maplibre-gl/dist/maplibre-gl-csp-worker.js', import.meta.url).toString())
+  workerConfigured = true
+}
 
 function toLngLat(p: LatLng): LngLatLike {
   return [p.lon, p.lat]
@@ -144,6 +153,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     if (!pkg) return
     if (mapRef.current) return
 
+    ensureMapLibreWorker()
+
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: buildRasterStyle(normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)),
@@ -152,6 +163,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       minZoom: pkg.minZoom,
       maxZoom: pkg.maxZoom,
       attributionControl: false,
+    })
+
+    map.on('error', (e: ErrorEvent) => {
+      // eslint-disable-next-line no-console
+      console.error('MapLibre error', e?.error ?? e)
     })
 
     map.addControl(new maplibregl.AttributionControl({ compact: true }))

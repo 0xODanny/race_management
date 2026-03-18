@@ -1,4 +1,4 @@
-export const OFFLINE_MAP_CACHE_VERSION = 'v1'
+export const OFFLINE_MAP_CACHE_VERSION = 'v2'
 
 // Cache used for tile responses needed for offline map usage.
 export function tilesCacheName() {

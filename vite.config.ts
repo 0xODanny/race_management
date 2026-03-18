@@ -44,7 +44,7 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.startsWith('/tiles/') || url.hostname === 'tile.openstreetmap.org',
             handler: 'CacheFirst',
             options: {
-              cacheName: 'rm_offline_tiles_v1',
+              cacheName: 'rm_offline_tiles_v2',
               expiration: { maxEntries: 20_000, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },

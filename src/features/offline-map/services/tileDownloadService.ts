@@ -94,8 +94,10 @@ export async function downloadOfflineMapPackage(params: {
 
       try {
         // Some tile hosts do not send CORS headers. For offline use, we can still
-        // prefetch and cache opaque responses.
-        const res = await fetch(url, { mode: 'no-cors' })
+        // prefetch and cache opaque responses. However, when using same-origin
+        // `/tiles/...` (proxy), we must avoid `no-cors` so tiles remain WebGL-usable.
+        const isSameOrigin = new URL(url).origin === window.location.origin
+        const res = isSameOrigin ? await fetch(url) : await fetch(url, { mode: 'no-cors' })
         if (!(res.ok || res.type === 'opaque')) {
           throw new Error(`Tile fetch failed (${res.status})`)
         }
