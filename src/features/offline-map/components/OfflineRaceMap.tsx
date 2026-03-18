@@ -140,6 +140,26 @@ function approxMetersBetween(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
+async function canDecodeImage(blob: Blob): Promise<{ ok: boolean; width?: number; height?: number; error?: string }> {
+  // A raster tile PNG can be very small if it compresses well; size is not a reliable validity check.
+  // Prefer decoding the image.
+  try {
+    if (typeof createImageBitmap !== 'function') return { ok: true }
+    const bmp = await createImageBitmap(blob)
+    const width = (bmp as unknown as { width?: number }).width
+    const height = (bmp as unknown as { height?: number }).height
+    try {
+      ;(bmp as unknown as { close?: () => void }).close?.()
+    } catch {
+      // ignore
+    }
+    if (typeof width === 'number' && typeof height === 'number' && width > 0 && height > 0) return { ok: true, width, height }
+    return { ok: false, error: 'decoded with invalid dimensions' }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'decode failed' }
+  }
+}
+
 function isInBbox(p: LatLng, bbox: { west: number; south: number; east: number; north: number }, padDeg = 0): boolean {
   return (
     p.lon >= bbox.west - padDeg &&
@@ -480,11 +500,12 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                   return
                 }
 
-                if (blob.size < 1024) {
+                const dec = await canDecodeImage(blob)
+                if (!dec.ok) {
                   if (debugEnabled) {
                     setDebugInfo((prev) =>
                       prev
-                        ? { ...prev, lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (too small)` }
+                        ? { ...prev, lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (decode failed)` }
                         : {
                             mapLoaded: null,
                             tilesLoaded: null,
@@ -497,14 +518,14 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                             container: 'unknown',
                             source: 'unknown',
                             webgl: 'unknown',
-                            lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (too small)`,
+                            lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (decode failed)`,
                           },
                     )
                   }
                   setMapInitError(
                     tr({
-                      en: `Map tiles look too small (${res.status} ${ct}, ${blob.size} bytes). This will render a blank map.`,
-                      pt: `Tiles do mapa parecem pequenos demais (${res.status} ${ct}, ${blob.size} bytes). Isso deixa o mapa em branco.`,
+                      en: `Map tiles could not be decoded (${res.status} ${ct || 'no-content-type'}, ${blob.size} bytes). This can render a blank map.`,
+                      pt: `Tiles do mapa não puderam ser decodificados (${res.status} ${ct || 'sem content-type'}, ${blob.size} bytes). Isso pode deixar o mapa em branco.`,
                     }),
                   )
                   return
@@ -728,11 +749,22 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             const res = await fetch(probeUrl, { cache: 'no-store' })
             const ct = (res.headers.get('content-type') || '').toLowerCase()
             const blob = await res.blob()
-            if (!ct.includes('image/') || blob.size < 1024) {
+            if (!ct.includes('image/')) {
               setMapInitError(
                 tr({
                   en: `Tiles look invalid (${res.status} ${ct || 'no-content-type'}, ${blob.size} bytes). This will render a blank map.`,
                   pt: `Tiles parecem inválidos (${res.status} ${ct || 'sem content-type'}, ${blob.size} bytes). Isso deixa o mapa em branco.`,
+                }),
+              )
+              return
+            }
+
+            const dec = await canDecodeImage(blob)
+            if (!dec.ok) {
+              setMapInitError(
+                tr({
+                  en: `Tiles could not be decoded (${res.status} ${ct || 'no-content-type'}, ${blob.size} bytes). This can render a blank map.`,
+                  pt: `Tiles não puderam ser decodificados (${res.status} ${ct || 'sem content-type'}, ${blob.size} bytes). Isso pode deixar o mapa em branco.`,
                 }),
               )
             }
