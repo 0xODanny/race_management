@@ -143,6 +143,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const mapRef = useRef<MapLibreMap | null>(null)
   const rafRef = useRef<number | null>(null)
   const initTimeoutRef = useRef<number | null>(null)
+  const tileTimeoutRef = useRef<number | null>(null)
 
   const [mapInitError, setMapInitError] = useState<string | null>(null)
 
@@ -323,6 +324,70 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           }
         }, 2500)
 
+        // Tile watchdog: catch the "white map, no errors" case.
+        // If style loads but tiles never paint, probe a tile for the *current view*.
+        tileTimeoutRef.current = window.setTimeout(() => {
+          const m = mapRef.current
+          if (!isMapUsable(m)) return
+
+          try {
+            const areTilesLoaded = typeof m.areTilesLoaded === 'function' ? m.areTilesLoaded() : null
+            if (areTilesLoaded === true) return
+
+            const c = m.getCenter()
+            const z = Math.min(Math.max(pkgSnapshot.minZoom, Math.round(m.getZoom())), pkgSnapshot.maxZoom)
+            const { x, y } = approxTileXY(c.lat, c.lng, z)
+            const url = new URL(`/tiles/${z}/${x}/${y}.png?watchdog=1&t=${Date.now()}`, window.location.href).toString()
+
+            void (async () => {
+              try {
+                const res = await fetch(url, { cache: 'no-store' })
+                const ct = (res.headers.get('content-type') || '').toLowerCase()
+                const blob = await res.blob()
+
+                if (!ct.includes('image/')) {
+                  setMapInitError(
+                    tr({
+                      en: `Map tiles are not images (${res.status} ${ct || 'no-content-type'}, ${blob.size} bytes). This will render a blank map.`,
+                      pt: `Tiles do mapa não são imagens (${res.status} ${ct || 'sem content-type'}, ${blob.size} bytes). Isso deixa o mapa em branco.`,
+                    }),
+                  )
+                  return
+                }
+
+                if (blob.size < 1024) {
+                  setMapInitError(
+                    tr({
+                      en: `Map tiles look too small (${res.status} ${ct}, ${blob.size} bytes). This will render a blank map.`,
+                      pt: `Tiles do mapa parecem pequenos demais (${res.status} ${ct}, ${blob.size} bytes). Isso deixa o mapa em branco.`,
+                    }),
+                  )
+                  return
+                }
+
+                // Tiles are reachable and valid, but nothing painted.
+                // This points to WebGL/GPU/driver issues or a blocked worker.
+                const canvas = m.getCanvas()
+                const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null
+                const vendor = gl ? String(gl.getParameter(gl.VENDOR) ?? '') : ''
+                const renderer = gl ? String(gl.getParameter(gl.RENDERER) ?? '') : ''
+
+                setMapInitError(
+                  tr({
+                    en: `Tiles are reachable (${ct}, ${blob.size} bytes) but the map did not paint. This is usually a WebGL/GPU issue or blocked workers. ${vendor || renderer ? `WebGL: ${vendor} ${renderer}` : ''}`,
+                    pt: `Tiles estão acessíveis (${ct}, ${blob.size} bytes) mas o mapa não renderizou. Normalmente é problema de WebGL/GPU ou bloqueio de workers. ${vendor || renderer ? `WebGL: ${vendor} ${renderer}` : ''}`,
+                  }),
+                )
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : ''
+                if (msg) setMapInitError(msg)
+              }
+            })()
+          } catch {
+            // ignore
+          }
+        }, 4500)
+
         mapRef.current = map
 
         // Probe a tile to detect cases where `/tiles/...` returns non-image content
@@ -365,6 +430,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       if (initTimeoutRef.current) {
         window.clearTimeout(initTimeoutRef.current)
         initTimeoutRef.current = null
+      }
+
+      if (tileTimeoutRef.current) {
+        window.clearTimeout(tileTimeoutRef.current)
+        tileTimeoutRef.current = null
       }
 
       detachCanvasListeners?.()
