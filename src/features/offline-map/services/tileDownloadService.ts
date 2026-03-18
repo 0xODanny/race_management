@@ -10,6 +10,39 @@ import {
 } from '../storage/offlineMapRepo'
 
 const AVG_TILE_BYTES = 40_000
+const OSM_TEMPLATE = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+
+function isTilesProxyUrl(templateUrl: string): boolean {
+  try {
+    const u = new URL(templateUrl, window.location.href)
+    return u.origin === window.location.origin && u.pathname.startsWith('/tiles/')
+  } catch {
+    return templateUrl.startsWith('/tiles/')
+  }
+}
+
+async function resolveTileTemplateUrlForDownload(pkg: OfflineEventMapPackage): Promise<string> {
+  const normalized = normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)
+  if (!isTilesProxyUrl(normalized)) return normalized
+
+  // Probe a single tile. If Vercel blocks the proxy, use direct OSM (CORS enabled).
+  try {
+    const z = Math.min(Math.max(pkg.minZoom, 15), pkg.maxZoom)
+    // A rough tile coordinate from package center.
+    const x = Math.floor(((pkg.center.lon + 180) / 360) * 2 ** z)
+    const latRad = (pkg.center.lat * Math.PI) / 180
+    const n = Math.tan(Math.PI / 4 + latRad / 2)
+    const y = Math.floor(((1 - Math.log(n) / Math.PI) / 2) * 2 ** z)
+
+    const probeUrl = new URL(`/tiles/${z}/${x}/${y}.png?probe=dl&t=${Date.now()}`, window.location.href).toString()
+    const res = await fetch(probeUrl, { cache: 'no-store' })
+    if (res.status === 403) return OSM_TEMPLATE
+  } catch {
+    // If we can't probe (offline/etc), keep original.
+  }
+
+  return normalized
+}
 
 export function estimatePackageTileCount(pkg: OfflineEventMapPackage): number {
   return tilesForBoundingBox(pkg.boundingBox, pkg.minZoom, pkg.maxZoom).length
@@ -49,6 +82,8 @@ export async function downloadOfflineMapPackage(params: {
 
   const cache = await caches.open(tilesCacheName())
 
+  const resolvedTemplate = await resolveTileTemplateUrlForDownload(pkg)
+
   // Mark package as downloading.
   const nextPkg: OfflineEventMapPackage = {
     ...pkg,
@@ -72,8 +107,7 @@ export async function downloadOfflineMapPackage(params: {
     while (index < tiles.length) {
       const i = index++
       const c = tiles[i]!
-      const normalizedTemplate = normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)
-      const url = new URL(tileUrl(normalizedTemplate, c), window.location.href).toString()
+      const url = new URL(tileUrl(resolvedTemplate, c), window.location.href).toString()
       const key = tileKey(pkg.eventId, pkg.packageVersion, c)
 
       const prev = existingByKey.get(key)
@@ -93,11 +127,14 @@ export async function downloadOfflineMapPackage(params: {
       })
 
       try {
-        // Some tile hosts do not send CORS headers. For offline use, we can still
-        // prefetch and cache opaque responses. However, when using same-origin
-        // `/tiles/...` (proxy), we must avoid `no-cors` so tiles remain WebGL-usable.
-        const isSameOrigin = new URL(url).origin === window.location.origin
-        const res = isSameOrigin ? await fetch(url) : await fetch(url, { mode: 'no-cors' })
+        // Prefer a normal fetch (CORS) when possible so cached responses stay WebGL-usable.
+        // If the host blocks CORS, fall back to `no-cors` and cache an opaque response.
+        let res: Response
+        try {
+          res = await fetch(url)
+        } catch {
+          res = await fetch(url, { mode: 'no-cors' })
+        }
         if (!(res.ok || res.type === 'opaque')) {
           throw new Error(`Tile fetch failed (${res.status})`)
         }

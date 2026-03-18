@@ -83,6 +83,48 @@ function buildRasterStyle(tileTemplateUrl: string): StyleSpecification {
   }
 }
 
+const OSM_TEMPLATE = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+
+function isTilesProxyUrl(templateUrl: string): boolean {
+  // Treat relative `/tiles/...` and absolute same-origin `/tiles/...` as proxy.
+  try {
+    const u = new URL(templateUrl, window.location.href)
+    return u.origin === window.location.origin && u.pathname.startsWith('/tiles/')
+  } catch {
+    return templateUrl.startsWith('/tiles/')
+  }
+}
+
+async function resolveTileTemplateUrl(params: {
+  templateUrl: string
+  center: LatLng
+  minZoom: number
+  maxZoom: number
+}): Promise<string> {
+  const { templateUrl, center, minZoom, maxZoom } = params
+  const normalized = normalizeTileTemplateUrl(templateUrl)
+
+  // If it's not our `/tiles` proxy, keep it.
+  if (!isTilesProxyUrl(normalized)) return normalized
+
+  // Probe one tile. If Vercel blocks `/tiles` with 403/challenge, fall back to direct OSM.
+  try {
+    const z = Math.min(Math.max(minZoom, 15), maxZoom)
+    const { x, y } = approxTileXY(center.lat, center.lon, z)
+    const url = new URL(`/tiles/${z}/${x}/${y}.png?probe=tilesProxy&t=${Date.now()}`, window.location.href).toString()
+    const res = await fetch(url, { cache: 'no-store' })
+    if (res.status === 403) return OSM_TEMPLATE
+  } catch {
+    // If probe fails (offline/etc), keep original.
+  }
+
+  return normalized
+}
+
+function fillTileTemplate(template: string, z: number, x: number, y: number): string {
+  return template.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y))
+}
+
 function createCheckpointEl(cp: OfflineCheckpoint, state: 'next' | 'done' | 'pending') {
   const el = document.createElement('div')
   el.style.width = '32px'
@@ -344,15 +386,30 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       ensureMapLibreWorker()
 
       try {
-        const map = new maplibregl.Map({
-          container: el,
-          style: buildRasterStyle(normalizeTileTemplateUrl(pkgSnapshot.tileManifest.tileTemplateUrl)),
-          center: toLngLat(pkgSnapshot.center),
-          zoom: Math.min(Math.max(pkgSnapshot.minZoom, 14), pkgSnapshot.maxZoom),
-          minZoom: pkgSnapshot.minZoom,
-          maxZoom: pkgSnapshot.maxZoom,
-          attributionControl: false,
-        })
+        let started = false
+
+        const start = async () => {
+          if (started || cancelled) return
+          started = true
+
+          const resolvedTemplate = await resolveTileTemplateUrl({
+            templateUrl: pkgSnapshot.tileManifest.tileTemplateUrl,
+            center: pkgSnapshot.center,
+            minZoom: pkgSnapshot.minZoom,
+            maxZoom: pkgSnapshot.maxZoom,
+          })
+
+          if (cancelled) return
+
+          const map = new maplibregl.Map({
+            container: el,
+            style: buildRasterStyle(resolvedTemplate),
+            center: toLngLat(pkgSnapshot.center),
+            zoom: Math.min(Math.max(pkgSnapshot.minZoom, 14), pkgSnapshot.maxZoom),
+            minZoom: pkgSnapshot.minZoom,
+            maxZoom: pkgSnapshot.maxZoom,
+            attributionControl: false,
+          })
 
         // Some browsers (esp. mobile + safe-area) change layout in the first paint.
         // Force a resize/repaint on load + after a short tick.
@@ -376,9 +433,9 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           }, 150)
         })
 
-        map.addControl(new maplibregl.AttributionControl({ compact: true }))
+          map.addControl(new maplibregl.AttributionControl({ compact: true }))
 
-        map.on('error', (e: ErrorEvent) => {
+          map.on('error', (e: ErrorEvent) => {
           // eslint-disable-next-line no-console
           console.error('MapLibre error', e?.error ?? e)
           const msg =
@@ -394,7 +451,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           )
         })
 
-        const canvas = map.getCanvas()
+          const canvas = map.getCanvas()
 
         const onContextLost = (evt: Event) => {
           try {
@@ -421,8 +478,8 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           )
         }
 
-        canvas.addEventListener('webglcontextlost', onContextLost as EventListener)
-        canvas.addEventListener('webglcontextcreationerror', onContextCreationError as EventListener)
+          canvas.addEventListener('webglcontextlost', onContextLost as EventListener)
+          canvas.addEventListener('webglcontextcreationerror', onContextCreationError as EventListener)
 
         detachCanvasListeners = () => {
           try {
@@ -434,7 +491,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         }
 
         // Watchdog: if the map never loads, surface a helpful message.
-        initTimeoutRef.current = window.setTimeout(() => {
+          initTimeoutRef.current = window.setTimeout(() => {
           if (!isMapUsable(mapRef.current)) return
           try {
             // `loaded()` can remain false for a while even if the map is already painting.
@@ -452,11 +509,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           } catch {
             // ignore
           }
-        }, 8000)
+          }, 8000)
 
         // Tile watchdog: catch the "white map, no errors" case.
         // If style loads but tiles never paint, probe a tile for the *current view*.
-        tileTimeoutRef.current = window.setTimeout(() => {
+          tileTimeoutRef.current = window.setTimeout(() => {
           const m = mapRef.current
           if (!isMapUsable(m)) return
 
@@ -467,11 +524,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             const c = m.getCenter()
             const z = Math.min(Math.max(pkgSnapshot.minZoom, Math.round(m.getZoom())), pkgSnapshot.maxZoom)
             const { x, y } = approxTileXY(c.lat, c.lng, z)
-            const url = new URL(`/tiles/${z}/${x}/${y}.png?watchdog=1&t=${Date.now()}`, window.location.href).toString()
+            const url = new URL(fillTileTemplate(resolvedTemplate, z, x, y), window.location.href)
+            url.searchParams.set('watchdog', '1')
+            url.searchParams.set('t', String(Date.now()))
 
             void (async () => {
               try {
-                const res = await fetch(url, { cache: 'no-store' })
+                const res = await fetch(url.toString(), { cache: 'no-store' })
                 const ct = (res.headers.get('content-type') || '').toLowerCase()
                 const blob = await res.blob()
 
@@ -580,12 +639,12 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           } catch {
             // ignore
           }
-        }, 4500)
+          }, 4500)
 
-        mapRef.current = map
+          mapRef.current = map
 
-        // Auto-clear transient watchdog messages once we can tell the map is rendering.
-        clearTransientErrorIfHealthy = () => {
+          // Auto-clear transient watchdog messages once we can tell the map is rendering.
+          clearTransientErrorIfHealthy = () => {
           const err = mapInitErrorRef.current
           if (!err) return
           if (
@@ -606,10 +665,10 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           }
         }
 
-        map.on('render', clearTransientErrorIfHealthy)
-        map.on('load', clearTransientErrorIfHealthy)
+          map.on('render', clearTransientErrorIfHealthy)
+          map.on('load', clearTransientErrorIfHealthy)
 
-        if (debugEnabled) {
+          if (debugEnabled) {
           const update = () => {
             const m = mapRef.current
             if (!isMapUsable(m)) return
@@ -734,10 +793,12 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
               const c = m.getCenter()
               const z = Math.min(Math.max(pkgSnapshot.minZoom, Math.round(m.getZoom())), pkgSnapshot.maxZoom)
               const { x, y } = approxTileXY(c.lat, c.lng, z)
-              const url = new URL(`/tiles/${z}/${x}/${y}.png?debugProbe=1&t=${Date.now()}`, window.location.href).toString()
+              const url = new URL(fillTileTemplate(resolvedTemplate, z, x, y), window.location.href)
+              url.searchParams.set('debugProbe', '1')
+              url.searchParams.set('t', String(Date.now()))
               void (async () => {
                 try {
-                  const res = await fetch(url, { cache: 'no-store' })
+                  const res = await fetch(url.toString(), { cache: 'no-store' })
                   const ct = (res.headers.get('content-type') || '').toLowerCase()
                   const blob = await res.blob()
                   setDebugInfo((prev) =>
@@ -769,14 +830,16 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           }, 1600)
         }
 
-        // Probe a tile to detect cases where `/tiles/...` returns non-image content
+          // Probe a tile to detect cases where tiles return non-image content
         // (e.g. an HTML error page) which would render the map as blank white.
-        void (async () => {
+          void (async () => {
           try {
             const z = Math.min(Math.max(pkgSnapshot.minZoom, 15), pkgSnapshot.maxZoom)
             const { x, y } = approxTileXY(pkgSnapshot.center.lat, pkgSnapshot.center.lon, z)
-            const probeUrl = new URL(`/tiles/${z}/${x}/${y}.png?probe=1&t=${Date.now()}`, window.location.href).toString()
-            const res = await fetch(probeUrl, { cache: 'no-store' })
+              const probeUrl = new URL(fillTileTemplate(resolvedTemplate, z, x, y), window.location.href)
+              probeUrl.searchParams.set('probe', '1')
+              probeUrl.searchParams.set('t', String(Date.now()))
+              const res = await fetch(probeUrl.toString(), { cache: 'no-store' })
             const ct = (res.headers.get('content-type') || '').toLowerCase()
             const blob = await res.blob()
             if (!ct.includes('image/')) {
@@ -802,7 +865,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             const msg = e instanceof Error ? e.message : ''
             if (msg) setMapInitError(msg)
           }
-        })()
+          })()
+        }
+
+        // Kick off async start (style resolution + map creation).
+        void start()
       } catch (e) {
         setMapInitError(e instanceof Error ? e.message : tr({ en: 'Map failed to initialize.', pt: 'Falha ao iniciar o mapa.' }))
       }
