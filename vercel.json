@@ -1,8 +1,7 @@
 {
-  "rewrites": [
-    {
-      "source": "/tiles/:path*",
-      "destination": "https://tile.openstreetmap.org/:path*"
-    }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/tiles/(.*)", "dest": "https://tile.openstreetmap.org/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
