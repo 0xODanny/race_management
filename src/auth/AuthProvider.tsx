@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import type { Provider } from '@supabase/supabase-js'
 import { env, isSupabaseConfigured } from '../lib/env'
 import { isTestModeEnabled, isTrialModeEnabled } from '../lib/demoMode'
 import { getSupabase } from '../lib/supabase'
@@ -17,6 +18,7 @@ type AuthState = {
   mode: 'supabase' | 'local'
 
   signInWithPassword: (params: { email: string; password: string }) => Promise<{ ok: true } | { ok: false; error: string }>
+  signInWithOAuth: (params: { provider: Provider; redirectTo: string }) => Promise<{ ok: true } | { ok: false; error: string }>
   signOut: () => Promise<void>
 }
 
@@ -26,6 +28,7 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   mode: 'supabase',
   signInWithPassword: async () => ({ ok: false, error: 'Auth not ready' }),
+  signInWithOAuth: async () => ({ ok: false, error: 'Auth not ready' }),
   signOut: async () => {},
 })
 
@@ -153,6 +156,19 @@ export function AuthProvider(props: { children: React.ReactNode }) {
           return { ok: true }
         } catch (e) {
           return { ok: false, error: e instanceof Error ? e.message : 'Login failed' }
+        }
+      },
+      signInWithOAuth: async ({ provider, redirectTo }) => {
+        if (useLocal) {
+          return { ok: false, error: 'OAuth is not available in local demo mode' }
+        }
+        try {
+          const supabase = getSupabase()
+          const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } })
+          if (error) return { ok: false, error: error.message }
+          return { ok: true }
+        } catch (e) {
+          return { ok: false, error: e instanceof Error ? e.message : 'OAuth sign-in failed' }
         }
       },
       signOut: async () => {

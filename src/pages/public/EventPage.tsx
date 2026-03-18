@@ -4,6 +4,14 @@ import { getSupabaseOrNull } from '../../lib/supabase'
 import { isTrialModeEnabled } from '../../lib/demoMode'
 import { getDemoEvent, getDemoEventText } from '../../demo/trialData'
 import { useI18n } from '../../i18n/i18n'
+import { fetchEventMapPackageMetadata } from '../../features/offline-map/services/offlinePackageService'
+import {
+  deleteOfflineEventPackage,
+  getOfflineEventPackage,
+  upsertOfflineEventPackage,
+} from '../../features/offline-map/storage/offlineMapRepo'
+import { deleteOfflineTilesForPackage, downloadOfflineMapPackage } from '../../features/offline-map/services/tileDownloadService'
+import type { OfflineEventMapPackage } from '../../features/offline-map/types'
 
 type EventRow = {
   id: string
@@ -19,6 +27,11 @@ export function EventPage() {
   const { tr, lang } = useI18n()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [offlinePkgStatus, setOfflinePkgStatus] = useState<
+    | { kind: 'idle'; pkg: OfflineEventMapPackage | null }
+    | { kind: 'downloading'; pkg: OfflineEventMapPackage | null; completed: number; total: number }
+    | { kind: 'error'; pkg: OfflineEventMapPackage | null; message: string }
+  >({ kind: 'idle', pkg: null })
 
   function formatStatus(status: string | null | undefined): string {
     const v = (status ?? '').toLowerCase()
@@ -81,6 +94,22 @@ export function EventPage() {
     }
   }, [eventId, tr, lang])
 
+  useEffect(() => {
+    const id = eventId
+    if (!id) return
+    const eventIdStr: string = id
+    let cancelled = false
+    async function loadPkg() {
+      const pkg = await getOfflineEventPackage(eventIdStr)
+      if (cancelled) return
+      setOfflinePkgStatus({ kind: 'idle', pkg })
+    }
+    void loadPkg()
+    return () => {
+      cancelled = true
+    }
+  }, [eventId])
+
   if (!eventId) return <div>{tr({ en: 'Missing event.', pt: 'Evento ausente.' })}</div>
 
   return (
@@ -140,6 +169,129 @@ export function EventPage() {
             })}
           </li>
         </ul>
+      </section>
+
+      <section className="rounded-lg border border-zinc-200 bg-white p-5">
+        <h2 className="text-lg font-bold">{tr({ en: 'Offline race map', pt: 'Mapa offline da prova' })}</h2>
+        <p className="mt-2 text-sm text-zinc-700">
+          {tr({
+            en: 'Download the map once so it can open without signal during the race.',
+            pt: 'Baixe o mapa uma vez para abrir sem sinal durante a prova.',
+          })}
+        </p>
+
+        <div className="mt-3 text-sm text-zinc-800">
+          {offlinePkgStatus.kind === 'downloading' ? (
+            <div>
+              {tr({ en: 'Downloading tiles…', pt: 'Baixando tiles…' })}{' '}
+              <span className="font-semibold">
+                {offlinePkgStatus.completed}/{offlinePkgStatus.total}
+              </span>
+            </div>
+          ) : offlinePkgStatus.pkg?.downloadStatus ? (
+            <div>
+              {tr({ en: 'Status:', pt: 'Status:' })}{' '}
+              <span className="font-semibold">{String(offlinePkgStatus.pkg.downloadStatus)}</span>
+            </div>
+          ) : (
+            <div>{tr({ en: 'Status: not downloaded', pt: 'Status: não baixado' })}</div>
+          )}
+
+          {offlinePkgStatus.kind === 'error' ? (
+            <div className="mt-2 text-sm text-red-700">{offlinePkgStatus.message}</div>
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            to={`/events/${eventId}/map`}
+            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold"
+          >
+            {tr({ en: 'Open map', pt: 'Abrir mapa' })}
+          </Link>
+
+          <button
+            type="button"
+            className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            disabled={offlinePkgStatus.kind === 'downloading' || !event}
+            onClick={async () => {
+              if (!eventId || !event) return
+              try {
+                setOfflinePkgStatus((prev) =>
+                  prev.kind === 'downloading' ? prev : { kind: 'downloading', pkg: prev.pkg, completed: 0, total: 0 },
+                )
+
+                let pkg = await getOfflineEventPackage(eventId)
+                if (!pkg) {
+                  pkg = await fetchEventMapPackageMetadata({
+                    eventId,
+                    eventName: event.title,
+                    venueName: event.location ?? '',
+                  })
+                  await upsertOfflineEventPackage(pkg)
+                }
+
+                setOfflinePkgStatus({
+                  kind: 'downloading',
+                  pkg,
+                  completed: pkg.tileManifest.completedTileCount ?? 0,
+                  total: pkg.tileManifest.totalTileCount ?? 0,
+                })
+
+                await downloadOfflineMapPackage({
+                  pkg,
+                  onProgress: (p) => {
+                    setOfflinePkgStatus({ kind: 'downloading', pkg, completed: p.completed, total: p.total })
+                  },
+                })
+
+                const updated = await getOfflineEventPackage(eventId)
+                setOfflinePkgStatus({ kind: 'idle', pkg: updated })
+              } catch (e) {
+                const updated = await getOfflineEventPackage(eventId)
+                setOfflinePkgStatus({
+                  kind: 'error',
+                  pkg: updated,
+                  message:
+                    e instanceof Error
+                      ? e.message
+                      : tr({ en: 'Map download error', pt: 'Erro ao baixar o mapa' }),
+                })
+              }
+            }}
+          >
+            {offlinePkgStatus.pkg?.downloadStatus === 'ready'
+              ? tr({ en: 'Re-download', pt: 'Baixar novamente' })
+              : offlinePkgStatus.pkg?.downloadStatus === 'downloading'
+                ? tr({ en: 'Downloading…', pt: 'Baixando…' })
+                : offlinePkgStatus.pkg?.downloadStatus === 'damaged'
+                  ? tr({ en: 'Resume download', pt: 'Retomar download' })
+                  : tr({ en: 'Download map', pt: 'Baixar mapa' })}
+          </button>
+
+          {offlinePkgStatus.pkg ? (
+            <button
+              type="button"
+              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              disabled={offlinePkgStatus.kind === 'downloading'}
+              onClick={async () => {
+                if (!eventId) return
+                const pkg = await getOfflineEventPackage(eventId)
+                if (!pkg) return
+
+                try {
+                  await deleteOfflineTilesForPackage({ eventId, packageVersion: pkg.packageVersion })
+                } finally {
+                  await deleteOfflineEventPackage(eventId)
+                }
+                const updated = await getOfflineEventPackage(eventId)
+                setOfflinePkgStatus({ kind: 'idle', pkg: updated })
+              }}
+            >
+              {tr({ en: 'Delete offline map', pt: 'Excluir mapa offline' })}
+            </button>
+          ) : null}
+        </div>
       </section>
     </div>
   )

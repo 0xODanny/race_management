@@ -14,7 +14,7 @@ export function PublicLayout() {
     <div className="min-h-dvh bg-zinc-50 text-zinc-900">
       <AutoResumeRace />
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto w-full max-w-md px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="mx-auto w-full max-w-md px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] md:max-w-3xl lg:max-w-5xl">
           <div className="flex items-center justify-between gap-3">
             <Link to="/" className="text-sm font-bold tracking-wide">
               RACE
@@ -59,16 +59,17 @@ export function PublicLayout() {
             <Link to="/how" className="hover:underline">
               {tr({ en: 'How it works', pt: 'Como funciona' })}
             </Link>
-            <Link to="/login" className="hover:underline">
-              {tr({ en: 'Athlete login', pt: 'Login do atleta' })}
-            </Link>
           </nav>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5">
+      <main className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5 md:max-w-3xl lg:max-w-5xl">
         <BackNav />
         <Outlet />
       </main>
+
+      <footer className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] text-center text-xs text-zinc-500 md:max-w-3xl lg:max-w-5xl">
+        84 Degrees Race Management. Copyright. 2026.
+      </footer>
     </div>
   )
 }

@@ -16,7 +16,7 @@ export function AppLayout() {
     <div className="min-h-dvh bg-zinc-50 text-zinc-900">
       <AutoResumeRace />
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] md:max-w-3xl lg:max-w-5xl">
           <Link to="/athlete" className="text-sm font-bold tracking-wide">
             {tr({ en: 'DASHBOARD', pt: 'PAINEL' })}
           </Link>
@@ -67,7 +67,7 @@ export function AppLayout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5">
+      <main className="mx-auto w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5 md:max-w-3xl lg:max-w-5xl">
         <BackNav />
         {auth.loading ? <div>{tr({ en: 'Loading…', pt: 'Carregando…' })}</div> : <Outlet />}
       </main>

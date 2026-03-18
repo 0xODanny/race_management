@@ -282,22 +282,6 @@ export function RaceModePage() {
     nav('/athlete', { replace: true })
   }
 
-  // Long-press on tiny exit.
-  const exitTimerRef = useRef<number | null>(null)
-  function onExitDown() {
-    if (exitTimerRef.current != null) return
-    exitTimerRef.current = window.setTimeout(() => {
-      exitTimerRef.current = null
-      void exitRaceMode()
-    }, 1200)
-  }
-  function onExitUp() {
-    if (exitTimerRef.current != null) {
-      window.clearTimeout(exitTimerRef.current)
-      exitTimerRef.current = null
-    }
-  }
-
   const syncStatus = !navigator.onLine
     ? tr({ en: 'OFFLINE', pt: 'OFFLINE' })
     : sync.syncing
@@ -349,16 +333,14 @@ export function RaceModePage() {
         </div>
       ) : null}
 
-      {/* Tiny hard-to-hit exit */}
       <button
-        onPointerDown={onExitDown}
-        onPointerUp={onExitUp}
-        onPointerCancel={onExitUp}
-        className="absolute left-1 top-1 h-7 w-7 rounded-full border border-white/20 bg-white/5 text-[10px] opacity-50"
-        aria-label="Exit race mode"
-        title="Long-press to exit"
+        type="button"
+        onClick={() => void exitRaceMode()}
+        className="absolute left-3 top-3 z-10 inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold"
+        aria-label={tr({ en: 'Exit race mode', pt: 'Sair do Race Mode' })}
       >
-        X
+        <span aria-hidden>←</span>
+        {tr({ en: 'Menu', pt: 'Menu' })}
       </button>
 
       <div className="mx-auto flex h-full w-full max-w-md flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
@@ -491,7 +473,7 @@ export function RaceModePage() {
           >
             {tr({ en: 'SCAN QR', pt: 'ESCANEAR QR' })}
           </Button>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Button
               variant="secondary"
               size="lg"
@@ -499,6 +481,14 @@ export function RaceModePage() {
               onClick={() => void sync.triggerSync()}
             >
               {tr({ en: 'Sync', pt: 'Sync' })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full bg-white/10 text-white hover:bg-white/15"
+              onClick={() => nav('/race/map')}
+            >
+              {tr({ en: 'Map', pt: 'Mapa' })}
             </Button>
             <Button
               variant="secondary"
