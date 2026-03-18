@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { useRaceStore } from '../../../state/raceStore'
 import { getExpectedNext } from '../../../race/routeEngine'
+import { useI18n } from '../../../i18n/i18n'
 import type { LatLng, OfflineCheckpoint, OfflineEventMapPackage, OfflineRouteOverlay } from '../types'
 import { listOfflineCheckpoints, getOfflineEventPackage, getOfflineRoute } from '../storage/offlineMapRepo'
 import { useGeolocation } from '../hooks/useGeolocation'
@@ -85,6 +86,7 @@ function isInBbox(p: LatLng, bbox: { west: number; south: number; east: number; 
 }
 
 export function OfflineRaceMap(props: { eventId: string; heightClass?: string }) {
+  const { tr } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
 
@@ -311,13 +313,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const gpsBadge =
     geo.status === 'active'
       ? geo.stale
-        ? 'GPS STALE'
-        : 'GPS ACTIVE'
+        ? tr({ en: 'GPS STALE', pt: 'GPS DESATUALIZADO' })
+        : tr({ en: 'GPS ACTIVE', pt: 'GPS ATIVO' })
       : geo.status === 'searching'
-        ? 'GPS SEARCHING'
+        ? tr({ en: 'GPS SEARCHING', pt: 'PROCURANDO GPS' })
         : geo.status === 'denied'
-          ? 'GPS DENIED'
-          : 'GPS UNAVAILABLE'
+          ? tr({ en: 'GPS DENIED', pt: 'GPS NEGADO' })
+          : tr({ en: 'GPS UNAVAILABLE', pt: 'GPS INDISPONÍVEL' })
 
   const gpsBadgeClass =
     geo.status === 'active' && !geo.stale
@@ -337,21 +339,24 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             {gpsBadge}
             {geo.fix?.accuracyMeters ? <span className="ml-2 font-semibold">±{Math.round(geo.fix.accuracyMeters)}m</span> : null}
           </div>
-          {!online ? <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">OFFLINE</div> : null}
+          {!online ? (
+            <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">{tr({ en: 'OFFLINE', pt: 'OFFLINE' })}</div>
+          ) : null}
           {pkg?.readyOffline ? (
-            <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">MAP READY</div>
+            <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">{tr({ en: 'MAP READY', pt: 'MAPA PRONTO' })}</div>
           ) : (
-            <div className="rounded-full bg-zinc-200 px-3 py-1 text-xs font-bold text-zinc-800">MAP NOT READY</div>
+            <div className="rounded-full bg-zinc-200 px-3 py-1 text-xs font-bold text-zinc-800">{tr({ en: 'MAP NOT READY', pt: 'MAPA NÃO PRONTO' })}</div>
           )}
         </div>
 
         {offRouteState?.kind === 'route' && offRouteState.offRoute ? (
           <div className="absolute left-3 right-3 top-14 z-10 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white">
-            You may be off course{typeof offRouteState.distanceMeters === 'number' ? ` (≈${Math.round(offRouteState.distanceMeters)}m)` : ''}
+            {tr({ en: 'You may be off course', pt: 'Você pode estar fora do percurso' })}
+            {typeof offRouteState.distanceMeters === 'number' ? ` (≈${Math.round(offRouteState.distanceMeters)}m)` : ''}
           </div>
         ) : offRouteState?.kind === 'outside' ? (
           <div className="absolute left-3 right-3 top-14 z-10 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-black">
-            You are outside the downloaded map area.
+            {tr({ en: 'You are outside the downloaded map area.', pt: 'Você está fora da área do mapa baixado.' })}
           </div>
         ) : null}
 
@@ -365,7 +370,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
               if (geo.fix) map.easeTo({ center: [geo.fix.lon, geo.fix.lat], zoom: Math.max(map.getZoom(), 15) })
             }}
           >
-            Center on me
+            {tr({ en: 'Center on me', pt: 'Centralizar em mim' })}
           </button>
           <button
             type="button"
@@ -375,19 +380,19 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             }
             onClick={() => setFollow((v) => !v)}
           >
-            {follow ? 'Following' : 'Follow'}
+            {follow ? tr({ en: 'Following', pt: 'Seguindo' }) : tr({ en: 'Follow', pt: 'Seguir' })}
           </button>
         </div>
 
         <div ref={containerRef} className="absolute inset-0 w-full bg-zinc-100">
           {!canShowMap ? (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-zinc-700">
-              Download the race map for offline use.
+              {tr({ en: 'Download the race map for offline use.', pt: 'Baixe o mapa da prova para uso offline.' })}
             </div>
           ) : null}
           {canShowMap && !route ? (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-700">
-              Loading route…
+              {tr({ en: 'Loading route…', pt: 'Carregando percurso…' })}
             </div>
           ) : null}
         </div>
@@ -395,7 +400,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
       <div className="border-t border-zinc-200 bg-white p-3 text-sm">
         <div className="flex items-center justify-between">
-          <div className="font-semibold">Next checkpoint</div>
+          <div className="font-semibold">{tr({ en: 'Next checkpoint', pt: 'Próximo checkpoint' })}</div>
           <div className="font-bold">{expectedNext?.code ?? '—'}</div>
         </div>
       </div>

@@ -8,11 +8,17 @@ import type { OfflineEventMapPackage } from '../../features/offline-map/types'
 import {
   deleteOfflineEventPackage,
   getOfflineEventPackage,
+  listOfflineTileMetadata,
   putOfflineCheckpoints,
   putOfflineRoute,
   upsertOfflineEventPackage,
 } from '../../features/offline-map/storage/offlineMapRepo'
-import { deleteOfflineTilesForPackage, downloadOfflineMapPackage, estimatePackageBytes } from '../../features/offline-map/services/tileDownloadService'
+import {
+  deleteOfflineTilesForPackage,
+  downloadOfflineMapPackage,
+  estimatePackageBytes,
+  estimatePackageTileCount,
+} from '../../features/offline-map/services/tileDownloadService'
 import { fetchEventMapPackageMetadata } from '../../features/offline-map/services/offlinePackageService'
 
 export function RaceMapPage() {
@@ -67,10 +73,9 @@ export function RaceMapPage() {
     if (!eventId) return
     setError(null)
     const meta = await ensureMapMetadata()
-    setDownloading({
-      completed: meta.tileManifest.completedTileCount ?? 0,
-      total: meta.tileManifest.totalTileCount ?? 0,
-    })
+    const total = meta.tileManifest.totalTileCount && meta.tileManifest.totalTileCount > 0 ? meta.tileManifest.totalTileCount : estimatePackageTileCount(meta)
+    const completed = meta.tileManifest.completedTileCount ?? 0
+    setDownloading({ completed, total })
 
     await downloadOfflineMapPackage({
       pkg: meta,
@@ -79,6 +84,21 @@ export function RaceMapPage() {
 
     setDownloading(null)
     await refreshOfflinePkg(eventId)
+
+    const updated = await getOfflineEventPackage(eventId)
+    if (updated?.downloadStatus === 'damaged') {
+      const tiles = await listOfflineTileMetadata(eventId)
+      const relevant = tiles.filter((t) => t.packageVersion === updated.packageVersion)
+      const done = relevant.filter((t) => t.status === 'done').length
+      const errors = relevant.filter((t) => t.status === 'error').length
+      const lastError = relevant.find((t) => t.status === 'error' && t.lastError)?.lastError
+      setError(
+        tr({
+          en: `Map download incomplete. Tiles ok: ${done}. Failed: ${errors}. ${lastError ? `Last error: ${lastError}` : ''}`,
+          pt: `Download do mapa incompleto. Tiles ok: ${done}. Falhas: ${errors}. ${lastError ? `Último erro: ${lastError}` : ''}`,
+        }),
+      )
+    }
   }
 
   async function deleteMap() {

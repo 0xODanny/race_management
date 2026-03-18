@@ -11,6 +11,10 @@ import {
 
 const AVG_TILE_BYTES = 40_000
 
+export function estimatePackageTileCount(pkg: OfflineEventMapPackage): number {
+  return tilesForBoundingBox(pkg.boundingBox, pkg.minZoom, pkg.maxZoom).length
+}
+
 export type TileDownloadProgress = {
   eventId: string
   packageVersion: string
@@ -20,8 +24,7 @@ export type TileDownloadProgress = {
 }
 
 export async function estimatePackageBytes(pkg: OfflineEventMapPackage): Promise<number> {
-  const tiles = tilesForBoundingBox(pkg.boundingBox, pkg.minZoom, pkg.maxZoom)
-  return tiles.length * AVG_TILE_BYTES
+  return estimatePackageTileCount(pkg) * AVG_TILE_BYTES
 }
 
 export async function downloadOfflineMapPackage(params: {
@@ -89,10 +92,13 @@ export async function downloadOfflineMapPackage(params: {
       })
 
       try {
-        const req = new Request(url, { mode: 'cors' })
-        const res = await fetch(req)
-        if (!res.ok) throw new Error(`Tile fetch failed (${res.status})`)
-        await cache.put(req, res.clone())
+        // Some tile hosts do not send CORS headers. For offline use, we can still
+        // prefetch and cache opaque responses.
+        const res = await fetch(url, { mode: 'no-cors' })
+        if (!(res.ok || res.type === 'opaque')) {
+          throw new Error(`Tile fetch failed (${res.status})`)
+        }
+        await cache.put(url, res.clone())
 
         completed++
         await upsertOfflineTileMetadata({
