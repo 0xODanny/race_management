@@ -102,6 +102,21 @@ export function AuthProvider(props: { children: React.ReactNode }) {
     let cancelled = false
     const supabase = getSupabase()
 
+    const resolveRole = async (u: AuthUser | null) => {
+      if (!u) return null
+      const fromMeta = readRoleFromMetadata((u as any).user_metadata)
+      if (fromMeta) return fromMeta
+      try {
+        const { data, error } = await supabase.from('profiles').select('role').eq('user_id', u.id).maybeSingle()
+        if (error) return null
+        const role = (data as any)?.role
+        if (role === 'athlete' || role === 'staff' || role === 'admin') return role as UserRole
+        return null
+      } catch {
+        return null
+      }
+    }
+
     supabase.auth.getSession().then(({ data, error }) => {
       if (cancelled) return
       if (error) {
@@ -112,18 +127,22 @@ export function AuthProvider(props: { children: React.ReactNode }) {
       }
       const session = data.session
       const u = (session?.user as any as AuthUser) ?? null
-      const r = u ? readRoleFromMetadata((u as any).user_metadata) : null
       setUser(u)
-      setRole(r)
       setLoading(false)
+      void resolveRole(u).then((r) => {
+        if (cancelled) return
+        setRole(r)
+      })
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = (session?.user as any as AuthUser) ?? null
-      const r = u ? readRoleFromMetadata((u as any).user_metadata) : null
       setUser(u)
-      setRole(r)
       setLoading(false)
+      void resolveRole(u).then((r) => {
+        if (cancelled) return
+        setRole(r)
+      })
     })
 
     return () => {

@@ -20,6 +20,7 @@ import { RaceMapPage } from '../pages/athlete/RaceMapPage'
 
 import { CheckInPage } from '../pages/staff/CheckInPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
+import { MapEditorPage } from '../pages/admin/MapEditorPage.tsx'
 
 export const router = createBrowserRouter([
   {
@@ -54,7 +55,11 @@ export const router = createBrowserRouter([
       },
       {
         element: <RequireRole allow={['admin']} />,
-        children: [{ path: '/admin', element: <AdminHomePage /> }],
+        children: [
+          { path: '/admin', element: <AdminHomePage /> },
+          { path: '/admin/map-editor', element: <MapEditorPage /> },
+          { path: '/admin/map-editor/:eventId', element: <MapEditorPage /> },
+        ],
       },
     ],
   },

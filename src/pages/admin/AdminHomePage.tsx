@@ -19,6 +19,11 @@ export function AdminHomePage() {
         <h2 className="text-lg font-bold">{tr({ en: 'Tools', pt: 'Ferramentas' })}</h2>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
           <li>
+            <Link to="/admin/map-editor" className="underline">
+              {tr({ en: 'Edit offline map waymarks (START/FIN/CPs)', pt: 'Editar waymarks do mapa (LARGADA/CHEGADA/CPs)' })}
+            </Link>
+          </li>
+          <li>
             {tr({
               en: 'Create events, categories, checkpoints, and block-based route stages',
               pt: 'Criar eventos, categorias, Checkpoints e etapas de rota baseadas em blocks',
