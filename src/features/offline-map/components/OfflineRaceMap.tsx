@@ -134,6 +134,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const rafRef = useRef<number | null>(null)
+  const initTimeoutRef = useRef<number | null>(null)
 
   const [mapInitError, setMapInitError] = useState<string | null>(null)
 
@@ -246,10 +247,72 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             e?.error && typeof e.error === 'object' && 'message' in e.error
               ? String((e.error as { message?: unknown }).message ?? '').trim()
               : ''
-          if (msg) setMapInitError(msg)
+          setMapInitError(
+            msg ||
+              tr({
+                en: 'Map error. If this persists, your browser may be blocking WebGL or workers.',
+                pt: 'Erro no mapa. Se persistir, seu navegador pode estar bloqueando WebGL ou workers.',
+              }),
+          )
         })
 
+        const canvas = map.getCanvas()
+
+        const onContextLost = (evt: Event) => {
+          try {
+            ;(evt as unknown as { preventDefault?: () => void }).preventDefault?.()
+          } catch {
+            // ignore
+          }
+          setMapInitError(
+            tr({
+              en: 'Map cannot render: WebGL context was lost. Try reloading, enabling hardware acceleration, or switching browsers/devices.',
+              pt: 'O mapa não pode renderizar: contexto WebGL foi perdido. Recarregue, ative aceleração de hardware ou troque de navegador/dispositivo.',
+            }),
+          )
+        }
+
+        const onContextCreationError = (evt: Event) => {
+          const msg = String((evt as unknown as { statusMessage?: unknown }).statusMessage ?? '').trim()
+          setMapInitError(
+            msg ||
+              tr({
+                en: 'Map cannot render: failed to create a WebGL context. Enable hardware acceleration or try another browser/device.',
+                pt: 'O mapa não pode renderizar: falha ao criar contexto WebGL. Ative aceleração de hardware ou tente outro navegador/dispositivo.',
+              }),
+          )
+        }
+
+        canvas.addEventListener('webglcontextlost', onContextLost as EventListener)
+        canvas.addEventListener('webglcontextcreationerror', onContextCreationError as EventListener)
+
+        // Watchdog: if the map never loads, surface a helpful message.
+        initTimeoutRef.current = window.setTimeout(() => {
+          if (!mapRef.current) return
+          try {
+            if (!map.loaded?.()) {
+              setMapInitError(
+                tr({
+                  en: 'Map did not finish loading. This is usually caused by blocked WebGL, blocked workers, or a GPU issue.',
+                  pt: 'O mapa não terminou de carregar. Normalmente isso acontece por bloqueio de WebGL, bloqueio de workers ou problema de GPU.',
+                }),
+              )
+            }
+          } catch {
+            // ignore
+          }
+        }, 2500)
+
         mapRef.current = map
+
+        return () => {
+          try {
+            canvas.removeEventListener('webglcontextlost', onContextLost as EventListener)
+            canvas.removeEventListener('webglcontextcreationerror', onContextCreationError as EventListener)
+          } catch {
+            // ignore
+          }
+        }
       } catch (e) {
         setMapInitError(e instanceof Error ? e.message : tr({ en: 'Map failed to initialize.', pt: 'Falha ao iniciar o mapa.' }))
       }
@@ -262,6 +325,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       if (rafRef.current) {
         window.cancelAnimationFrame(rafRef.current)
         rafRef.current = null
+      }
+
+      if (initTimeoutRef.current) {
+        window.clearTimeout(initTimeoutRef.current)
+        initTimeoutRef.current = null
       }
 
       const map = mapRef.current
