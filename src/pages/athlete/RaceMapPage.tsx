@@ -269,9 +269,9 @@ export function RaceMapPage() {
           {error ? <div className="mt-3 text-sm text-red-200">{error}</div> : null}
         </div>
 
-        <div className="mt-4 flex-1">
+        <div className="mt-4 flex-1 min-h-0">
           {eventId ? (
-            <OfflineRaceMap eventId={eventId} heightClass="h-[calc(100dvh-8.75rem)]" />
+            <OfflineRaceMap eventId={eventId} heightClass="h-full" />
           ) : (
             <div className="rounded-lg border border-white/10 bg-white/5 p-5 text-sm text-white/80">
               {tr({

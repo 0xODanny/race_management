@@ -75,6 +75,15 @@ function makeCircleGeoJson(center: LatLng, radiusMeters: number, steps = 48): Ge
   }
 }
 
+function isInBbox(p: LatLng, bbox: { west: number; south: number; east: number; north: number }, padDeg = 0): boolean {
+  return (
+    p.lon >= bbox.west - padDeg &&
+    p.lon <= bbox.east + padDeg &&
+    p.lat >= bbox.south - padDeg &&
+    p.lat <= bbox.north + padDeg
+  )
+}
+
 export function OfflineRaceMap(props: { eventId: string; heightClass?: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -291,8 +300,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
   const offRouteState = useMemo(() => {
     if (!geo.fix || !route) return null
-    return offRouteWarning({ pos: { lat: geo.fix.lat, lon: geo.fix.lon }, route, thresholdMeters: 60 })
-  }, [geo.fix, route])
+    if (geo.stale) return { kind: 'stale' as const }
+    if (pkg?.boundingBox && !isInBbox({ lat: geo.fix.lat, lon: geo.fix.lon }, pkg.boundingBox, 0.001)) {
+      return { kind: 'outside' as const }
+    }
+    const r = offRouteWarning({ pos: { lat: geo.fix.lat, lon: geo.fix.lon }, route, thresholdMeters: 60 })
+    return { kind: 'route' as const, ...r }
+  }, [geo.fix, geo.stale, route, pkg?.boundingBox])
 
   const gpsBadge =
     geo.status === 'active'
@@ -316,61 +330,67 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const heightClass = props.heightClass ?? 'h-[70vh]'
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-zinc-200 bg-white">
-      <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2">
-        <div className={'rounded-full px-3 py-1 text-xs font-bold ' + gpsBadgeClass}>
-          {gpsBadge}
-          {geo.fix?.accuracyMeters ? <span className="ml-2 font-semibold">±{Math.round(geo.fix.accuracyMeters)}m</span> : null}
+    <div className={heightClass + ' relative flex flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white'}>
+      <div className="relative flex-1">
+        <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2">
+          <div className={'rounded-full px-3 py-1 text-xs font-bold ' + gpsBadgeClass}>
+            {gpsBadge}
+            {geo.fix?.accuracyMeters ? <span className="ml-2 font-semibold">±{Math.round(geo.fix.accuracyMeters)}m</span> : null}
+          </div>
+          {!online ? <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">OFFLINE</div> : null}
+          {pkg?.readyOffline ? (
+            <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">MAP READY</div>
+          ) : (
+            <div className="rounded-full bg-zinc-200 px-3 py-1 text-xs font-bold text-zinc-800">MAP NOT READY</div>
+          )}
         </div>
-        {!online ? <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">OFFLINE</div> : null}
-        {pkg?.readyOffline ? (
-          <div className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">MAP READY</div>
-        ) : (
-          <div className="rounded-full bg-zinc-200 px-3 py-1 text-xs font-bold text-zinc-800">MAP NOT READY</div>
-        )}
-      </div>
 
-      {offRouteState?.offRoute ? (
-        <div className="absolute left-3 right-3 top-14 z-10 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white">
-          You may be off course{typeof offRouteState.distanceMeters === 'number' ? ` (≈${Math.round(offRouteState.distanceMeters)}m)` : ''}
-        </div>
-      ) : null}
-
-      <div className="absolute bottom-3 right-3 z-10 grid gap-2">
-        <button
-          type="button"
-          className="rounded-md bg-black px-3 py-2 text-sm font-semibold text-white"
-          onClick={() => {
-            const map = mapRef.current
-            if (!map) return
-            if (geo.fix) map.easeTo({ center: [geo.fix.lon, geo.fix.lat], zoom: Math.max(map.getZoom(), 15) })
-          }}
-        >
-          Center on me
-        </button>
-        <button
-          type="button"
-          className={
-            'rounded-md px-3 py-2 text-sm font-semibold ' +
-            (follow ? 'bg-white text-black border border-zinc-300' : 'bg-black text-white')
-          }
-          onClick={() => setFollow((v) => !v)}
-        >
-          {follow ? 'Following' : 'Follow'}
-        </button>
-      </div>
-
-      <div ref={containerRef} className={heightClass + ' w-full bg-zinc-100'}>
-        {!canShowMap ? (
-          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-zinc-700">
-            Download the race map for offline use.
+        {offRouteState?.kind === 'route' && offRouteState.offRoute ? (
+          <div className="absolute left-3 right-3 top-14 z-10 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white">
+            You may be off course{typeof offRouteState.distanceMeters === 'number' ? ` (≈${Math.round(offRouteState.distanceMeters)}m)` : ''}
+          </div>
+        ) : offRouteState?.kind === 'outside' ? (
+          <div className="absolute left-3 right-3 top-14 z-10 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-black">
+            You are outside the downloaded map area.
           </div>
         ) : null}
-        {canShowMap && !route ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-700">
-            Loading route…
-          </div>
-        ) : null}
+
+        <div className="absolute bottom-3 right-3 z-10 grid gap-2">
+          <button
+            type="button"
+            className="rounded-md bg-black px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => {
+              const map = mapRef.current
+              if (!map) return
+              if (geo.fix) map.easeTo({ center: [geo.fix.lon, geo.fix.lat], zoom: Math.max(map.getZoom(), 15) })
+            }}
+          >
+            Center on me
+          </button>
+          <button
+            type="button"
+            className={
+              'rounded-md px-3 py-2 text-sm font-semibold ' +
+              (follow ? 'bg-white text-black border border-zinc-300' : 'bg-black text-white')
+            }
+            onClick={() => setFollow((v) => !v)}
+          >
+            {follow ? 'Following' : 'Follow'}
+          </button>
+        </div>
+
+        <div ref={containerRef} className="absolute inset-0 w-full bg-zinc-100">
+          {!canShowMap ? (
+            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-zinc-700">
+              Download the race map for offline use.
+            </div>
+          ) : null}
+          {canShowMap && !route ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-700">
+              Loading route…
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="border-t border-zinc-200 bg-white p-3 text-sm">
