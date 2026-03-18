@@ -8,7 +8,7 @@ import { LanguageToggle, useI18n } from '../../i18n/i18n'
 export function AppLayout() {
   const auth = useAuth()
   const { tr } = useI18n()
-  const showDemoButtons = import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
+  const showDemoButtons = auth.mode === 'local' || import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
   const testOn = isTestModeEnabled()
   const trialOn = isTrialModeEnabled()
 

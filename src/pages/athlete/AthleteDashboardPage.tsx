@@ -5,10 +5,12 @@ import { useRaceStore } from '../../state/raceStore'
 import { Button } from '../../ui/Button'
 import { useI18n } from '../../i18n/i18n'
 import { isTestModeEnabled, isTrialModeEnabled } from '../../lib/demoMode'
+import { useAuth } from '../../auth/AuthProvider'
 
 export function AthleteDashboardPage() {
   const nav = useNavigate()
   const { tr } = useI18n()
+  const auth = useAuth()
   const pkg = useRaceStore((s) => s.activePackage)
   const session = useRaceStore((s) => s.activeSession)
   const loadByBib = useRaceStore((s) => s.loadPackageFromServerByBibQr)
@@ -17,7 +19,7 @@ export function AthleteDashboardPage() {
 
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const showDemo = import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
+  const showDemo = auth.mode === 'local' || import.meta.env.DEV || isTestModeEnabled() || isTrialModeEnabled()
 
   async function onBibScan(raw: string) {
     setScanning(false)
