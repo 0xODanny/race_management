@@ -58,6 +58,14 @@ function withStyleLoaded(map: MapLibreMap, cb: () => void): () => void {
   }
 }
 
+function approxTileXY(lat: number, lon: number, z: number): { x: number; y: number } {
+  const x = Math.floor(((lon + 180) / 360) * 2 ** z)
+  const latRad = (lat * Math.PI) / 180
+  const n = Math.tan(Math.PI / 4 + latRad / 2)
+  const y = Math.floor(((1 - Math.log(n) / Math.PI) / 2) * 2 ** z)
+  return { x, y }
+}
+
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
 function buildRasterStyle(tileTemplateUrl: string): StyleSpecification {
@@ -191,8 +199,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     if (!pkg) return
     if (mapRef.current) return
 
+    const pkgSnapshot = pkg
+
     setMapInitError(null)
     let cancelled = false
+    let detachCanvasListeners: (() => void) | null = null
 
     const hasWebGL = () => {
       try {
@@ -230,11 +241,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       try {
         const map = new maplibregl.Map({
           container: el,
-          style: buildRasterStyle(normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)),
-          center: toLngLat(pkg.center),
-          zoom: Math.min(Math.max(pkg.minZoom, 14), pkg.maxZoom),
-          minZoom: pkg.minZoom,
-          maxZoom: pkg.maxZoom,
+          style: buildRasterStyle(normalizeTileTemplateUrl(pkgSnapshot.tileManifest.tileTemplateUrl)),
+          center: toLngLat(pkgSnapshot.center),
+          zoom: Math.min(Math.max(pkgSnapshot.minZoom, 14), pkgSnapshot.maxZoom),
+          minZoom: pkgSnapshot.minZoom,
+          maxZoom: pkgSnapshot.maxZoom,
           attributionControl: false,
         })
 
@@ -286,6 +297,15 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         canvas.addEventListener('webglcontextlost', onContextLost as EventListener)
         canvas.addEventListener('webglcontextcreationerror', onContextCreationError as EventListener)
 
+        detachCanvasListeners = () => {
+          try {
+            canvas.removeEventListener('webglcontextlost', onContextLost as EventListener)
+            canvas.removeEventListener('webglcontextcreationerror', onContextCreationError as EventListener)
+          } catch {
+            // ignore
+          }
+        }
+
         // Watchdog: if the map never loads, surface a helpful message.
         initTimeoutRef.current = window.setTimeout(() => {
           if (!mapRef.current) return
@@ -305,14 +325,29 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
         mapRef.current = map
 
-        return () => {
+        // Probe a tile to detect cases where `/tiles/...` returns non-image content
+        // (e.g. an HTML error page) which would render the map as blank white.
+        void (async () => {
           try {
-            canvas.removeEventListener('webglcontextlost', onContextLost as EventListener)
-            canvas.removeEventListener('webglcontextcreationerror', onContextCreationError as EventListener)
-          } catch {
-            // ignore
+            const z = Math.min(Math.max(pkgSnapshot.minZoom, 15), pkgSnapshot.maxZoom)
+            const { x, y } = approxTileXY(pkgSnapshot.center.lat, pkgSnapshot.center.lon, z)
+            const probeUrl = new URL(`/tiles/${z}/${x}/${y}.png?probe=1&t=${Date.now()}`, window.location.href).toString()
+            const res = await fetch(probeUrl, { cache: 'no-store' })
+            const ct = (res.headers.get('content-type') || '').toLowerCase()
+            const blob = await res.blob()
+            if (!ct.includes('image/') || blob.size < 1024) {
+              setMapInitError(
+                tr({
+                  en: `Tiles look invalid (${res.status} ${ct || 'no-content-type'}, ${blob.size} bytes). This will render a blank map.`,
+                  pt: `Tiles parecem inválidos (${res.status} ${ct || 'sem content-type'}, ${blob.size} bytes). Isso deixa o mapa em branco.`,
+                }),
+              )
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : ''
+            if (msg) setMapInitError(msg)
           }
-        }
+        })()
       } catch (e) {
         setMapInitError(e instanceof Error ? e.message : tr({ en: 'Map failed to initialize.', pt: 'Falha ao iniciar o mapa.' }))
       }
@@ -331,6 +366,9 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         window.clearTimeout(initTimeoutRef.current)
         initTimeoutRef.current = null
       }
+
+      detachCanvasListeners?.()
+      detachCanvasListeners = null
 
       const map = mapRef.current
       try {
