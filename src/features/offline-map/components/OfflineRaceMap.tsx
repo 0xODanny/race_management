@@ -211,7 +211,7 @@ function isInBbox(p: LatLng, bbox: { west: number; south: number; east: number; 
   )
 }
 
-export function OfflineRaceMap(props: { eventId: string; heightClass?: string }) {
+export function OfflineRaceMap(props: { eventId: string; heightClass?: string; enableOffRouteWarnings?: boolean }) {
   const { tr } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -1091,6 +1091,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   }, [geo.fix, follow])
 
   const offRouteState = useMemo(() => {
+    if (!props.enableOffRouteWarnings) return null
     if (!geo.fix || !route) return null
     if (geo.stale) return { kind: 'stale' as const }
     if (pkg?.boundingBox && !isInBbox({ lat: geo.fix.lat, lon: geo.fix.lon }, pkg.boundingBox, 0.001)) {
@@ -1098,7 +1099,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     }
     const r = offRouteWarning({ pos: { lat: geo.fix.lat, lon: geo.fix.lon }, route, thresholdMeters: 60 })
     return { kind: 'route' as const, ...r }
-  }, [geo.fix, geo.stale, route, pkg?.boundingBox])
+  }, [geo.fix, geo.stale, route, pkg?.boundingBox, props.enableOffRouteWarnings])
 
   const gpsBadge =
     geo.status === 'active'
