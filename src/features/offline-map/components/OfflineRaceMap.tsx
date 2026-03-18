@@ -128,6 +128,18 @@ function makeCircleGeoJson(center: LatLng, radiusMeters: number, steps = 48): Ge
   }
 }
 
+function approxMetersBetween(a: LatLng, b: LatLng): number {
+  const R = 6371000
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180
+  const lat1 = (a.lat * Math.PI) / 180
+  const lat2 = (b.lat * Math.PI) / 180
+  const sinDLat = Math.sin(dLat / 2)
+  const sinDLon = Math.sin(dLon / 2)
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
+}
+
 function isInBbox(p: LatLng, bbox: { west: number; south: number; east: number; north: number }, padDeg = 0): boolean {
   return (
     p.lon >= bbox.west - padDeg &&
@@ -180,6 +192,9 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   const [follow, setFollow] = useState(true)
   const [online, setOnline] = useState(() => navigator.onLine)
 
+  const lastFollowAtRef = useRef<number>(0)
+  const lastFollowPosRef = useRef<LatLng | null>(null)
+
   const geo = useGeolocation({ eventId: props.eventId, enabled: true, highAccuracy: true })
 
   useEffect(() => {
@@ -209,6 +224,36 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       cancelled = true
     }
   }, [props.eventId])
+
+  // Keep the map canvas sized correctly (especially important in mobile Safari/Chrome and during layout changes).
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const map = mapRef.current
+    if (!map) return
+
+    let rafId: number | null = null
+    const ro = new ResizeObserver(() => {
+      if (rafId) window.cancelAnimationFrame(rafId)
+      rafId = window.requestAnimationFrame(() => {
+        try {
+          if (isMapUsable(mapRef.current)) mapRef.current.resize()
+        } catch {
+          // ignore
+        }
+      })
+    })
+
+    ro.observe(el)
+    return () => {
+      try {
+        ro.disconnect()
+      } catch {
+        // ignore
+      }
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [pkg])
 
   // Init map
   useEffect(() => {
@@ -666,7 +711,24 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
       posMarker.setLngLat([geo.fix.lon, geo.fix.lat]).addTo(map)
 
       if (follow) {
-        map.easeTo({ center: [geo.fix.lon, geo.fix.lat], duration: 400 })
+        // Throttle follow updates to avoid a constant move/cancel loop that prevents tiles from settling.
+        const now = Date.now()
+        const nextPos: LatLng = { lat: geo.fix.lat, lon: geo.fix.lon }
+        const lastPos = lastFollowPosRef.current
+        const moved = lastPos ? approxMetersBetween(lastPos, nextPos) : 999
+
+        if (moved >= 8 && now - lastFollowAtRef.current >= 900) {
+          lastFollowAtRef.current = now
+          lastFollowPosRef.current = nextPos
+          try {
+            // If the map is already moving (e.g., due to GPS jitter), jumpTo is less disruptive than easeTo.
+            const moving = typeof map.isMoving === 'function' ? map.isMoving() : false
+            if (moving) map.jumpTo({ center: [geo.fix.lon, geo.fix.lat] })
+            else map.easeTo({ center: [geo.fix.lon, geo.fix.lat], duration: 350 })
+          } catch {
+            // ignore
+          }
+        }
       }
 
       const acc = geo.fix.accuracyMeters
