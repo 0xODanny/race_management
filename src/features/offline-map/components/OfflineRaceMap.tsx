@@ -30,6 +30,34 @@ function isMapUsable(map: MapLibreMap | null): map is MapLibreMap {
   return !m._removed && !!m.style
 }
 
+function withStyleLoaded(map: MapLibreMap, cb: () => void): () => void {
+  try {
+    if (map.isStyleLoaded?.()) {
+      cb()
+      return () => {}
+    }
+  } catch {
+    // fall through and attach load handler
+  }
+
+  const onLoad = () => {
+    try {
+      cb()
+    } catch {
+      // ignore
+    }
+  }
+
+  map.once('load', onLoad)
+  return () => {
+    try {
+      map.off('load', onLoad)
+    } catch {
+      // ignore
+    }
+  }
+}
+
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
 function buildRasterStyle(tileTemplateUrl: string): StyleSpecification {
@@ -199,24 +227,27 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
       setRoute(r)
 
-      if (!isMapUsable(map)) return
+      const detach = withStyleLoaded(map, () => {
+        if (!isMapUsable(map)) return
+        if (!map.getSource('route')) {
+          map.addSource('route', { type: 'geojson', data: r.routeGeoJson })
+          map.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route',
+            paint: {
+              'line-color': '#000000',
+              'line-width': 4,
+              'line-opacity': 0.85,
+            },
+          })
+        } else {
+          const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined
+          src?.setData(r.routeGeoJson)
+        }
+      })
 
-      if (!map.getSource('route')) {
-        map.addSource('route', { type: 'geojson', data: r.routeGeoJson })
-        map.addLayer({
-          id: 'route-line',
-          type: 'line',
-          source: 'route',
-          paint: {
-            'line-color': '#000000',
-            'line-width': 4,
-            'line-opacity': 0.85,
-          },
-        })
-      } else {
-        const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined
-        src?.setData(r.routeGeoJson)
-      }
+      if (cancelled) detach()
     }
 
     void add()
@@ -267,7 +298,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
     const posMarker = new maplibregl.Marker({ element: posMarkerEl, anchor: 'center' })
 
-    const ensureAccuracy = () => {
+    const detachAccuracy = withStyleLoaded(map, () => {
       if (!isMapUsable(map)) return
       if (!map.getSource('accuracy')) {
         map.addSource('accuracy', {
@@ -287,9 +318,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           paint: { 'line-color': '#000000', 'line-width': 2, 'line-opacity': 0.25 },
         })
       }
-    }
-
-    ensureAccuracy()
+    })
 
     const update = () => {
       if (!isMapUsable(map)) return
@@ -320,6 +349,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     update()
 
     return () => {
+      detachAccuracy()
       posMarker.remove()
       if (!isMapUsable(map)) return
       try {
