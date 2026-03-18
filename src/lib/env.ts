@@ -9,6 +9,10 @@ export const env = {
   // Base64 (NOT base64url) encoded 32-byte Ed25519 public key.
   qrVerifyPublicKeyB64: readEnv('VITE_QR_VERIFY_PUBLIC_KEY_B64'),
 
+  // Local/demo escape hatch: allow QR payloads without signature verification.
+  // Enable with: VITE_QR_ALLOW_UNVERIFIED=1
+  qrAllowUnverified: readEnv('VITE_QR_ALLOW_UNVERIFIED') === '1',
+
   // Local demo auth for localhost verification (no Supabase required).
   // Enable with: VITE_LOCAL_AUTH=1
   localAuthEnabled: readEnv('VITE_LOCAL_AUTH') === '1',

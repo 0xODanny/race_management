@@ -45,9 +45,26 @@ This repo is an MVP implementation of an “operate-from-a-phone” race timing 
 
    - Set `VITE_LOCAL_AUTH=1`
    - Optional: set `VITE_LOCAL_AUTH_AUTO_ADMIN=1` to auto-sign-in on start
+   - Optional: set `VITE_QR_ALLOW_UNVERIFIED=1` to allow scanning demo QRs without signature verification
    - Demo credentials:
      - Email: `admin@admin.com`
      - Password: `123456789@`
+
+   Demo QR format (local only):
+
+   - `RMDEMO:bib:<eventId>:<bibId>`
+   - `RMDEMO:start:<eventId>:<checkpointId>`
+   - `RMDEMO:checkpoint:<eventId>:<checkpointId>`
+   - `RMDEMO:finish:<eventId>:<checkpointId>`
+
+   Example with the built-in demo race package:
+
+   - `RMDEMO:start:demo-bra-serra-trail-21k:cp_start`
+   - `RMDEMO:checkpoint:demo-bra-serra-trail-21k:cp1`
+   - `RMDEMO:checkpoint:demo-bra-serra-trail-21k:cp2`
+   - `RMDEMO:checkpoint:demo-bra-serra-trail-21k:cp3`
+   - `RMDEMO:checkpoint:demo-bra-serra-trail-21k:cp4`
+   - `RMDEMO:finish:demo-bra-serra-trail-21k:cp_fin`
 
 3. Run
 
@@ -85,6 +102,8 @@ Checkpoint and Bib QRs are expected to be **signed**. The client verifies signat
 - Verify key is configured via `VITE_QR_VERIFY_PUBLIC_KEY_B64`
 
 The `sign-qr` edge function signs payloads for printing/issuance (admin-only).
+
+Local demo note: when `VITE_LOCAL_AUTH=1` (or `VITE_QR_ALLOW_UNVERIFIED=1`), the app can accept unsigned demo QRs for local testing.
 
 ## Race Mode behavior
 
