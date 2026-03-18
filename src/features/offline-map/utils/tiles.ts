@@ -28,6 +28,15 @@ export function tilesForBoundingBox(bbox: BoundingBox, minZoom: number, maxZoom:
   return tiles
 }
 
+// MapLibre (WebGL) generally requires same-origin (or CORS-enabled) tile responses.
+// For the default OSM host, we proxy it through our own origin at `/tiles/...`.
+export function normalizeTileTemplateUrl(templateUrl: string): string {
+  if (templateUrl.startsWith('https://tile.openstreetmap.org/')) {
+    return '/tiles/{z}/{x}/{y}.png'
+  }
+  return templateUrl
+}
+
 export function tileUrl(templateUrl: string, c: TileCoord) {
   return templateUrl.replace('{z}', String(c.z)).replace('{x}', String(c.x)).replace('{y}', String(c.y))
 }

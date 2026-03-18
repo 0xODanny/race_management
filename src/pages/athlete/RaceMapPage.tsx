@@ -171,7 +171,7 @@ export function RaceMapPage() {
       tileManifest: {
         eventId,
         packageVersion: version,
-        tileTemplateUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        tileTemplateUrl: '/tiles/{z}/{x}/{y}.png',
         tileFormat: 'png',
         minZoom,
         maxZoom,

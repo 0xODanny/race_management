@@ -1,5 +1,5 @@
 import type { OfflineEventMapPackage } from '../types'
-import { tilesForBoundingBox, tileKey, tileUrl } from '../utils/tiles'
+import { normalizeTileTemplateUrl, tilesForBoundingBox, tileKey, tileUrl } from '../utils/tiles'
 import { tilesCacheName } from './cacheNames'
 import {
   listOfflineTileMetadata,
@@ -72,7 +72,8 @@ export async function downloadOfflineMapPackage(params: {
     while (index < tiles.length) {
       const i = index++
       const c = tiles[i]!
-      const url = tileUrl(pkg.tileManifest.tileTemplateUrl, c)
+      const normalizedTemplate = normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)
+      const url = new URL(tileUrl(normalizedTemplate, c), window.location.href).toString()
       const key = tileKey(pkg.eventId, pkg.packageVersion, c)
 
       const prev = existingByKey.get(key)

@@ -9,6 +9,7 @@ import type { LatLng, OfflineCheckpoint, OfflineEventMapPackage, OfflineRouteOve
 import { listOfflineCheckpoints, getOfflineEventPackage, getOfflineRoute } from '../storage/offlineMapRepo'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { offRouteWarning } from '../services/routeProximityService'
+import { normalizeTileTemplateUrl } from '../utils/tiles'
 
 function toLngLat(p: LatLng): LngLatLike {
   return [p.lon, p.lat]
@@ -145,7 +146,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: buildRasterStyle(pkg.tileManifest.tileTemplateUrl),
+      style: buildRasterStyle(normalizeTileTemplateUrl(pkg.tileManifest.tileTemplateUrl)),
       center: toLngLat(pkg.center),
       zoom: Math.min(Math.max(pkg.minZoom, 14), pkg.maxZoom),
       minZoom: pkg.minZoom,

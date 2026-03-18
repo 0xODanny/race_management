@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/tiles/:path*",
+      "destination": "https://tile.openstreetmap.org/:path*"
+    }
+  ]
+}

@@ -4,6 +4,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      '/tiles': {
+        target: 'https://tile.openstreetmap.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/tiles/, ''),
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -32,7 +41,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,ico,webmanifest,png}'],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.hostname === 'tile.openstreetmap.org',
+            urlPattern: ({ url }) => url.pathname.startsWith('/tiles/') || url.hostname === 'tile.openstreetmap.org',
             handler: 'CacheFirst',
             options: {
               cacheName: 'rm_offline_tiles_v1',

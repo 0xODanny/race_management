@@ -97,7 +97,7 @@ export async function fetchEventMapPackageMetadata(params: {
       tileManifest: {
         eventId: params.eventId,
         packageVersion: 'demo-1',
-        tileTemplateUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        tileTemplateUrl: '/tiles/{z}/{x}/{y}.png',
         tileFormat: 'png',
         minZoom,
         maxZoom,
