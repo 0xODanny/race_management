@@ -173,8 +173,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     tilesLoaded: boolean | null
     styleLoaded: boolean | null
     canvas: string
+    canvasRect: string
+    canvasCss: string
+    canvases: string
     view: string
     container: string
+    source: string
+    webgl: string
     lastProbe: string | null
   } | null>(null)
 
@@ -324,6 +329,28 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           attributionControl: false,
         })
 
+        // Some browsers (esp. mobile + safe-area) change layout in the first paint.
+        // Force a resize/repaint on load + after a short tick.
+        map.once('load', () => {
+          try {
+            map.resize()
+            map.triggerRepaint()
+          } catch {
+            // ignore
+          }
+
+          window.setTimeout(() => {
+            try {
+              if (isMapUsable(mapRef.current)) {
+                mapRef.current.resize()
+                mapRef.current.triggerRepaint()
+              }
+            } catch {
+              // ignore
+            }
+          }, 150)
+        })
+
         map.addControl(new maplibregl.AttributionControl({ compact: true }))
 
         map.on('error', (e: ErrorEvent) => {
@@ -429,8 +456,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                             tilesLoaded: null,
                             styleLoaded: null,
                             canvas: 'unknown',
+                            canvasRect: 'unknown',
+                            canvasCss: 'unknown',
+                            canvases: 'unknown',
                             view: 'unknown',
                             container: 'unknown',
+                            source: 'unknown',
+                            webgl: 'unknown',
                             lastProbe: `probe: ${res.status} ${ct || 'no-ct'} ${blob.size} bytes (not image)`,
                           },
                     )
@@ -454,8 +486,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                             tilesLoaded: null,
                             styleLoaded: null,
                             canvas: 'unknown',
+                            canvasRect: 'unknown',
+                            canvasCss: 'unknown',
+                            canvases: 'unknown',
                             view: 'unknown',
                             container: 'unknown',
+                            source: 'unknown',
+                            webgl: 'unknown',
                             lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (too small)`,
                           },
                     )
@@ -478,8 +515,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                           tilesLoaded: null,
                           styleLoaded: null,
                           canvas: 'unknown',
+                          canvasRect: 'unknown',
+                          canvasCss: 'unknown',
+                          canvases: 'unknown',
                           view: 'unknown',
                           container: 'unknown',
+                          source: 'unknown',
+                          webgl: 'unknown',
                           lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (image ok)`,
                         },
                   )
@@ -488,7 +530,9 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                 // Tiles are reachable and valid, but nothing painted.
                 // This points to WebGL/GPU/driver issues or a blocked worker.
                 const canvas = m.getCanvas()
-                const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null
+                const gl =
+                  (canvas.getContext('webgl2') as WebGL2RenderingContext | null) ||
+                  ((canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null)
                 const vendor = gl ? String(gl.getParameter(gl.VENDOR) ?? '') : ''
                 const renderer = gl ? String(gl.getParameter(gl.RENDERER) ?? '') : ''
 
@@ -518,6 +562,60 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
               const canvas = m.getCanvas()
               const container = containerRef.current
               const contRect = container?.getBoundingClientRect()
+
+              const canvasRect = canvas.getBoundingClientRect()
+              const canvasCss = (() => {
+                try {
+                  const s = window.getComputedStyle(canvas)
+                  return `disp=${s.display} vis=${s.visibility} op=${s.opacity} pos=${s.position} z=${s.zIndex} tx=${s.transform === 'none' ? 'none' : 'xform'} mix=${s.mixBlendMode}`
+                } catch {
+                  return 'unknown'
+                }
+              })()
+
+              const canvases = (() => {
+                try {
+                  return container ? `${container.querySelectorAll('canvas').length} canvas(es)` : 'unknown'
+                } catch {
+                  return 'unknown'
+                }
+              })()
+
+              const source = (() => {
+                try {
+                  const style = m.getStyle?.()
+                  const sources = style?.sources as Record<string, unknown> | undefined
+                  const raster = sources?.raster as { tiles?: unknown } | undefined
+                  const t = raster?.tiles
+                  const first = Array.isArray(t) ? String(t[0] ?? '') : ''
+                  return first || 'unknown'
+                } catch {
+                  return 'unknown'
+                }
+              })()
+
+              const webgl = (() => {
+                try {
+                  const gl =
+                    (canvas.getContext('webgl2') as WebGL2RenderingContext | null) ||
+                    ((canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null)
+                  if (!gl) return 'no-context'
+
+                  const px = new Uint8Array(4)
+                  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px)
+
+                  const dbg = gl.getExtension('WEBGL_debug_renderer_info') as
+                    | { UNMASKED_VENDOR_WEBGL: number; UNMASKED_RENDERER_WEBGL: number }
+                    | null
+                    | undefined
+                  const vendor = dbg ? String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) ?? '') : String(gl.getParameter(gl.VENDOR) ?? '')
+                  const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? '') : String(gl.getParameter(gl.RENDERER) ?? '')
+                  return `px=${Array.from(px).join(',')} ${vendor} ${renderer}`.trim()
+                } catch {
+                  return 'error'
+                }
+              })()
+
               const mm = m as unknown as {
                 loaded?: () => unknown
                 areTilesLoaded?: () => unknown
@@ -528,8 +626,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                 tilesLoaded: typeof mm.areTilesLoaded === 'function' ? !!mm.areTilesLoaded() : null,
                 styleLoaded: typeof mm.isStyleLoaded === 'function' ? !!mm.isStyleLoaded() : null,
                 canvas: `${canvas.clientWidth}x${canvas.clientHeight} css, ${canvas.width}x${canvas.height} px`,
+                canvasRect: `${Math.round(canvasRect.width)}x${Math.round(canvasRect.height)} rect @${Math.round(canvasRect.left)},${Math.round(canvasRect.top)}`,
+                canvasCss,
+                canvases,
                 view: `z=${m.getZoom().toFixed(2)} center=${m.getCenter().lng.toFixed(5)},${m.getCenter().lat.toFixed(5)}`,
                 container: contRect ? `${Math.round(contRect.width)}x${Math.round(contRect.height)} rect` : 'unknown',
+                source,
+                webgl,
                 lastProbe: prev?.lastProbe ?? null,
               }))
             } catch {
@@ -572,8 +675,13 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                           tilesLoaded: null,
                           styleLoaded: null,
                           canvas: 'unknown',
+                          canvasRect: 'unknown',
+                          canvasCss: 'unknown',
+                          canvases: 'unknown',
                           view: 'unknown',
                           container: 'unknown',
+                          source: 'unknown',
+                          webgl: 'unknown',
                           lastProbe: `probe: ${res.status} ${ct || 'no-ct'} ${blob.size} bytes`,
                         },
                   )
@@ -918,6 +1026,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
             </div>
             <div>container: {debugInfo.container}</div>
             <div>canvas: {debugInfo.canvas}</div>
+            <div>canvasRect: {debugInfo.canvasRect}</div>
+            <div>canvasCss: {debugInfo.canvasCss}</div>
+            <div>canvases: {debugInfo.canvases}</div>
+            <div>source: {debugInfo.source}</div>
+            <div>webgl: {debugInfo.webgl}</div>
             <div>{debugInfo.view}</div>
             <div>probe: {debugInfo.lastProbe ?? '—'}</div>
           </div>
