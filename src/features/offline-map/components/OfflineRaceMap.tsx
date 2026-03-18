@@ -147,6 +147,22 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
   const [mapInitError, setMapInitError] = useState<string | null>(null)
 
+  const debugEnabled = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).has('debugMap')
+    } catch {
+      return false
+    }
+  }, [])
+
+  const [debugInfo, setDebugInfo] = useState<{
+    mapLoaded: boolean | null
+    tilesLoaded: boolean | null
+    styleLoaded: boolean | null
+    canvas: string
+    lastProbe: string | null
+  } | null>(null)
+
   const activePackage = useRaceStore((s) => s.activePackage)
   const activeSession = useRaceStore((s) => s.activeSession)
 
@@ -205,6 +221,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     setMapInitError(null)
     let cancelled = false
     let detachCanvasListeners: (() => void) | null = null
+    let detachDebug: (() => void) | null = null
 
     const hasWebGL = () => {
       try {
@@ -346,6 +363,19 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                 const blob = await res.blob()
 
                 if (!ct.includes('image/')) {
+                  if (debugEnabled) {
+                    setDebugInfo((prev) =>
+                      prev
+                        ? { ...prev, lastProbe: `probe: ${res.status} ${ct || 'no-ct'} ${blob.size} bytes (not image)` }
+                        : {
+                            mapLoaded: null,
+                            tilesLoaded: null,
+                            styleLoaded: null,
+                            canvas: 'unknown',
+                            lastProbe: `probe: ${res.status} ${ct || 'no-ct'} ${blob.size} bytes (not image)`,
+                          },
+                    )
+                  }
                   setMapInitError(
                     tr({
                       en: `Map tiles are not images (${res.status} ${ct || 'no-content-type'}, ${blob.size} bytes). This will render a blank map.`,
@@ -356,6 +386,19 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                 }
 
                 if (blob.size < 1024) {
+                  if (debugEnabled) {
+                    setDebugInfo((prev) =>
+                      prev
+                        ? { ...prev, lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (too small)` }
+                        : {
+                            mapLoaded: null,
+                            tilesLoaded: null,
+                            styleLoaded: null,
+                            canvas: 'unknown',
+                            lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (too small)`,
+                          },
+                    )
+                  }
                   setMapInitError(
                     tr({
                       en: `Map tiles look too small (${res.status} ${ct}, ${blob.size} bytes). This will render a blank map.`,
@@ -363,6 +406,20 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
                     }),
                   )
                   return
+                }
+
+                if (debugEnabled) {
+                  setDebugInfo((prev) =>
+                    prev
+                      ? { ...prev, lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (image ok)` }
+                      : {
+                          mapLoaded: null,
+                          tilesLoaded: null,
+                          styleLoaded: null,
+                          canvas: 'unknown',
+                          lastProbe: `probe: ${res.status} ${ct} ${blob.size} bytes (image ok)`,
+                        },
+                  )
                 }
 
                 // Tiles are reachable and valid, but nothing painted.
@@ -389,6 +446,42 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         }, 4500)
 
         mapRef.current = map
+
+        if (debugEnabled) {
+          const update = () => {
+            const m = mapRef.current
+            if (!isMapUsable(m)) return
+            try {
+              const canvas = m.getCanvas()
+              const mm = m as unknown as {
+                loaded?: () => unknown
+                areTilesLoaded?: () => unknown
+                isStyleLoaded?: () => unknown
+              }
+              setDebugInfo((prev) => ({
+                mapLoaded: typeof mm.loaded === 'function' ? !!mm.loaded() : null,
+                tilesLoaded: typeof mm.areTilesLoaded === 'function' ? !!mm.areTilesLoaded() : null,
+                styleLoaded: typeof mm.isStyleLoaded === 'function' ? !!mm.isStyleLoaded() : null,
+                canvas: `${canvas.clientWidth}x${canvas.clientHeight} css, ${canvas.width}x${canvas.height} px`,
+                lastProbe: prev?.lastProbe ?? null,
+              }))
+            } catch {
+              // ignore
+            }
+          }
+
+          update()
+          map.on('render', update)
+          map.on('load', update)
+          detachDebug = () => {
+            try {
+              map.off('render', update)
+              map.off('load', update)
+            } catch {
+              // ignore
+            }
+          }
+        }
 
         // Probe a tile to detect cases where `/tiles/...` returns non-image content
         // (e.g. an HTML error page) which would render the map as blank white.
@@ -439,6 +532,11 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
       detachCanvasListeners?.()
       detachCanvasListeners = null
+
+      detachDebug?.()
+      detachDebug = null
+
+      setDebugInfo(null)
 
       const map = mapRef.current
       try {
@@ -685,6 +783,16 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
         {/* Important: keep the MapLibre container free of React children.
             React reconciliation can remove the map's injected canvas on re-render. */}
         <div ref={containerRef} className="absolute inset-0 w-full bg-zinc-100" />
+
+        {debugEnabled && debugInfo ? (
+          <div className="absolute bottom-3 left-3 z-10 max-w-[22rem] rounded-md border border-zinc-200 bg-white/95 p-2 text-[11px] font-semibold text-zinc-900">
+            <div>
+              loaded: {String(debugInfo.mapLoaded)} | style: {String(debugInfo.styleLoaded)} | tiles: {String(debugInfo.tilesLoaded)}
+            </div>
+            <div>canvas: {debugInfo.canvas}</div>
+            <div>probe: {debugInfo.lastProbe ?? '—'}</div>
+          </div>
+        ) : null}
 
         {mapInitError ? (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm font-semibold text-zinc-800">
