@@ -78,7 +78,8 @@ export function AthleteDashboardPage() {
         ) : (
           <div className="mt-3 text-sm text-zinc-700">{tr({ en: 'No race package loaded.', pt: 'Nenhum pacote de prova carregado.' })}</div>
         )}
-          {showDemo && !pkg ? (
+        {showDemo && !pkg ? (
+          <div className="mt-4">
             <Button
               variant="secondary"
               onClick={async () => {
@@ -89,7 +90,8 @@ export function AthleteDashboardPage() {
             >
               {tr({ en: 'Load demo race (no QR)', pt: 'Carregar demo (sem QR)' })}
             </Button>
-          ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-5 flex flex-wrap gap-3">
           <Button variant="secondary" onClick={() => setScanning((v) => !v)}>
@@ -101,17 +103,18 @@ export function AthleteDashboardPage() {
             {tr({ en: 'Enter Race Mode', pt: 'Entrar no Race Mode' })}
           </Button>
           <Button variant="secondary" onClick={() => nav('/athlete/course')} disabled={!pkg}>
-        <div className="mt-4 text-xs text-zinc-600">
-          {tr({
-            en: 'Bib QR loads your assigned route and bib number into this device for offline Race Mode.',
-            pt: 'O Bib QR carrega sua rota atribuída e o número do bib neste dispositivo para o Race Mode offline.',
-          })}
-        </div>
             {tr({ en: 'View Course Info', pt: 'Ver informações do percurso' })}
           </Button>
           <Button variant="secondary" onClick={() => nav('/athlete/results')} disabled={!pkg}>
             {tr({ en: 'View Results', pt: 'Ver resultados' })}
           </Button>
+        </div>
+
+        <div className="mt-4 text-xs text-zinc-600">
+          {tr({
+            en: 'Bib QR loads your assigned route and bib number into this device for offline Race Mode.',
+            pt: 'O Bib QR carrega sua rota atribuída e o número do bib neste dispositivo para o Race Mode offline.',
+          })}
         </div>
 
         {scanning ? (
