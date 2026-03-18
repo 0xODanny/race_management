@@ -24,6 +24,12 @@ function toLngLat(p: LatLng): LngLatLike {
   return [p.lon, p.lat]
 }
 
+function isMapUsable(map: MapLibreMap | null): map is MapLibreMap {
+  if (!map) return false
+  const m = map as unknown as { _removed?: boolean; style?: unknown }
+  return !m._removed && !!m.style
+}
+
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
 function buildRasterStyle(tileTemplateUrl: string): StyleSpecification {
@@ -186,12 +192,14 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
     async function add() {
       const map = mapRef.current
-      if (!map) return
+      if (!isMapUsable(map)) return
 
       const r = await getOfflineRoute(props.eventId)
       if (cancelled || !r) return
 
       setRoute(r)
+
+      if (!isMapUsable(map)) return
 
       if (!map.getSource('route')) {
         map.addSource('route', { type: 'geojson', data: r.routeGeoJson })
@@ -221,7 +229,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   // Checkpoint markers
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!isMapUsable(map)) return
     if (!checkpoints.length) return
 
     const markers: maplibregl.Marker[] = []
@@ -248,7 +256,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
   // GPS marker + accuracy circle
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!isMapUsable(map)) return
 
     const posMarkerEl = document.createElement('div')
     posMarkerEl.style.width = '14px'
@@ -260,6 +268,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     const posMarker = new maplibregl.Marker({ element: posMarkerEl, anchor: 'center' })
 
     const ensureAccuracy = () => {
+      if (!isMapUsable(map)) return
       if (!map.getSource('accuracy')) {
         map.addSource('accuracy', {
           type: 'geojson',
@@ -283,6 +292,7 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
     ensureAccuracy()
 
     const update = () => {
+      if (!isMapUsable(map)) return
       if (!geo.fix) {
         posMarker.remove()
         const src = map.getSource('accuracy') as maplibregl.GeoJSONSource | undefined
@@ -311,9 +321,14 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
 
     return () => {
       posMarker.remove()
-      if (map.getLayer('accuracy-fill')) map.removeLayer('accuracy-fill')
-      if (map.getLayer('accuracy-outline')) map.removeLayer('accuracy-outline')
-      if (map.getSource('accuracy')) map.removeSource('accuracy')
+      if (!isMapUsable(map)) return
+      try {
+        if (map.getLayer('accuracy-fill')) map.removeLayer('accuracy-fill')
+        if (map.getLayer('accuracy-outline')) map.removeLayer('accuracy-outline')
+        if (map.getSource('accuracy')) map.removeSource('accuracy')
+      } catch {
+        // Map may have been removed between renders.
+      }
     }
   }, [geo.fix, follow])
 
