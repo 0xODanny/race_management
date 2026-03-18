@@ -1,6 +1,7 @@
 import { getSupabaseOrNull } from '../../../lib/supabase'
 import { isTrialModeEnabled } from '../../../lib/demoMode'
 import type { BoundingBox, OfflineCheckpoint, OfflineEventMapPackage, OfflineRouteOverlay } from '../types'
+import { getOfflineRaceProgress } from '../storage/offlineMapRepo'
 import { bboxCenter } from '../utils/geo'
 
 function demoCenterForEvent(eventId: string) {
@@ -75,7 +76,18 @@ export async function fetchEventMapPackageMetadata(params: {
 
   // Demo/local mode: provide a self-contained package without any backend calls.
   if (isTrialModeEnabled() || !getSupabaseOrNull()) {
-    const center = demoCenterForEvent(params.eventId)
+    // Prefer last-known device GPS position so the offline download area matches where the user actually is.
+    // This avoids confusing "outside downloaded map area" warnings when the demo event metadata is for a different city.
+    let center = demoCenterForEvent(params.eventId)
+    try {
+      const progress = await getOfflineRaceProgress(params.eventId)
+      const fix = progress?.lastKnownFix
+      if (fix && typeof fix.lat === 'number' && typeof fix.lon === 'number') {
+        center = { lat: fix.lat, lon: fix.lon }
+      }
+    } catch {
+      // ignore
+    }
     const bbox = demoBbox(center)
     const route = demoRoute(params.eventId, center)
     const checkpoints = demoCheckpoints(params.eventId, center)
