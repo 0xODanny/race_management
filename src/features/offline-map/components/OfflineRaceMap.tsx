@@ -416,18 +416,21 @@ export function OfflineRaceMap(props: { eventId: string; heightClass?: string })
           </button>
         </div>
 
-        <div ref={containerRef} className="absolute inset-0 w-full bg-zinc-100">
-          {!canShowMap ? (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-zinc-700">
-              {tr({ en: 'Download the race map for offline use.', pt: 'Baixe o mapa da prova para uso offline.' })}
-            </div>
-          ) : null}
-          {canShowMap && !route ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-700">
-              {tr({ en: 'Loading route…', pt: 'Carregando percurso…' })}
-            </div>
-          ) : null}
-        </div>
+        {/* Important: keep the MapLibre container free of React children.
+            React reconciliation can remove the map's injected canvas on re-render. */}
+        <div ref={containerRef} className="absolute inset-0 w-full bg-zinc-100" />
+
+        {!canShowMap ? (
+          <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-zinc-700">
+            {tr({ en: 'Download the race map for offline use.', pt: 'Baixe o mapa da prova para uso offline.' })}
+          </div>
+        ) : null}
+
+        {canShowMap && !route ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-700">
+            {tr({ en: 'Loading route…', pt: 'Carregando percurso…' })}
+          </div>
+        ) : null}
       </div>
 
       <div className="border-t border-zinc-200 bg-white p-3 text-sm">
