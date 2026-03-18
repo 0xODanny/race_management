@@ -202,7 +202,11 @@ export function RaceMapPage() {
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold"
-            onClick={() => nav(-1)}
+            onClick={() => {
+              // After a hard refresh / deep-link, there may be no meaningful history.
+              if (window.history.length > 1) nav(-1)
+              else nav('/athlete')
+            }}
             aria-label={tr({ en: 'Back', pt: 'Voltar' })}
           >
             <span aria-hidden>←</span>
@@ -291,13 +295,22 @@ export function RaceMapPage() {
 
         <div className="mt-4 flex-1 min-h-0">
           {eventId ? (
-            <OfflineRaceMap eventId={eventId} heightClass="h-full" />
+            <OfflineRaceMap
+              key={`${offlinePkg?.packageVersion ?? 'none'}:${offlinePkg?.downloadStatus ?? 'none'}:${offlinePkg?.readyOffline ? '1' : '0'}`}
+              eventId={eventId}
+              heightClass="h-full"
+            />
           ) : (
             <div className="rounded-lg border border-white/10 bg-white/5 p-5 text-sm text-white/80">
               {tr({
                 en: 'No active race package found. Load your Bib first.',
                 pt: 'Nenhum pacote de prova ativo. Carregue seu Bib primeiro.',
               })}
+              <div className="mt-4">
+                <Button size="md" variant="secondary" onClick={() => nav('/athlete', { replace: true })}>
+                  {tr({ en: 'Go to dashboard', pt: 'Ir ao painel' })}
+                </Button>
+              </div>
             </div>
           )}
         </div>
