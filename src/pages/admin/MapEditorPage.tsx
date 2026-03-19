@@ -202,6 +202,15 @@ export function MapEditorPage() {
     map.flyTo({ center: [w.lon, w.lat], zoom: Math.max(map.getZoom(), 16) })
   }
 
+  const fitAllWaymarks = () => {
+    const map = mapRef.current
+    if (!map) return
+    if (!waymarks.length) return
+    const b = new maplibregl.LngLatBounds([waymarks[0]!.lon, waymarks[0]!.lat], [waymarks[0]!.lon, waymarks[0]!.lat])
+    for (const w of waymarks) b.extend([w.lon, w.lat])
+    map.fitBounds(b, { padding: 80, maxZoom: 16 })
+  }
+
   const parseCoords = (raw: string): { lat: number; lon: number } | null => {
     const t = raw.trim()
     if (!t) return null
@@ -795,6 +804,14 @@ export function MapEditorPage() {
             onClick={() => setWaymarks([])}
           >
             {tr({ en: 'Clear all', pt: 'Limpar tudo' })}
+          </button>
+          <button
+            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+            onClick={() => fitAllWaymarks()}
+            disabled={!waymarks.length}
+            title={tr({ en: 'Zoom to include all waypoints', pt: 'Zoom para incluir todos os waypoints' })}
+          >
+            {tr({ en: 'Fit all waypoints', pt: 'Enquadrar waypoints' })}
           </button>
           <button
             className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
