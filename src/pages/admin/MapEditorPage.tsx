@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { useI18n } from '../../i18n/i18n'
 import type { OfflineCheckpoint, OfflineCheckpointType } from '../../features/offline-map/types'
+import { getSupabaseOrNull } from '../../lib/supabase'
 
 let workerConfigured = false
 function ensureMapLibreWorker() {
@@ -21,8 +22,55 @@ type Waymark = {
   lon: number
 }
 
+type EventRow = { id: string; title: string; location: string | null }
+
+type MapOptionRow = {
+  id: string
+  event_id: string
+  name: string
+  status: 'draft' | 'live'
+  checkpoints: OfflineCheckpoint[]
+  bounding_box: { west: number; south: number; east: number; north: number } | null
+  min_zoom: number
+  max_zoom: number
+  tile_template_url: string
+  updated_at: string
+}
+
 function normalizeEventId(v: string) {
   return v.trim()
+}
+
+function fromOfflineCheckpoints(cps: OfflineCheckpoint[]): Waymark[] {
+  const sorted = cps.slice().sort((a, b) => a.requiredSequenceOrder - b.requiredSequenceOrder)
+  return sorted.map((c) => {
+    const type: Waymark['type'] = c.type === 'start' ? 'start' : c.type === 'finish' ? 'finish' : 'checkpoint'
+    const code = type === 'start' ? 'START' : type === 'finish' ? 'FIN' : c.checkpointName || 'CP'
+    return {
+      id: c.checkpointId,
+      code,
+      type,
+      lat: c.latitude,
+      lon: c.longitude,
+    }
+  })
+}
+
+function bboxFromWaymarks(waymarks: Waymark[], padDeg = 0.02) {
+  let west = 180
+  let east = -180
+  let south = 90
+  let north = -90
+  for (const w of waymarks) {
+    west = Math.min(west, w.lon)
+    east = Math.max(east, w.lon)
+    south = Math.min(south, w.lat)
+    north = Math.max(north, w.lat)
+  }
+  if (!waymarks.length) {
+    return { west: -48.5482 - padDeg, east: -48.5482 + padDeg, south: -27.5949 - padDeg, north: -27.5949 + padDeg }
+  }
+  return { west: west - padDeg, east: east + padDeg, south: south - padDeg, north: north + padDeg }
 }
 
 function createWaymarkEl(label: string, kind: Waymark['type']) {
@@ -113,6 +161,22 @@ export function MapEditorPage() {
   const modeRef = useRef<'start' | 'finish' | 'checkpoint' | 'pan'>(mode)
   const [waymarks, setWaymarks] = useState<Waymark[]>([])
 
+  const [events, setEvents] = useState<EventRow[]>([])
+  const [eventsError, setEventsError] = useState<string | null>(null)
+
+  const [options, setOptions] = useState<MapOptionRow[]>([])
+  const [optionsError, setOptionsError] = useState<string | null>(null)
+  const [selectedOptionId, setSelectedOptionId] = useState<string>('')
+  const selectedOption = useMemo(() => options.find((o) => o.id === selectedOptionId) ?? null, [options, selectedOptionId])
+
+  const [newOptionName, setNewOptionName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const [minZoom, setMinZoom] = useState(13)
+  const [maxZoom, setMaxZoom] = useState(15)
+  const [bbox, setBbox] = useState<{ west: number; south: number; east: number; north: number } | null>(null)
+  const [tileTemplateUrl, setTileTemplateUrl] = useState('https://tile.openstreetmap.org/{z}/{x}/{y}.png')
+
   const [placeQuery, setPlaceQuery] = useState('')
   const [placeBusy, setPlaceBusy] = useState(false)
   const [placeError, setPlaceError] = useState<string | null>(null)
@@ -130,6 +194,12 @@ export function MapEditorPage() {
       return
     }
     map.flyTo({ center: [params.lon, params.lat], zoom: Math.max(map.getZoom(), 14) })
+  }
+
+  const flyToWaymark = (w: Waymark) => {
+    const map = mapRef.current
+    if (!map) return
+    map.flyTo({ center: [w.lon, w.lat], zoom: Math.max(map.getZoom(), 16) })
   }
 
   const parseCoords = (raw: string): { lat: number; lon: number } | null => {
@@ -220,6 +290,191 @@ export function MapEditorPage() {
     const cps = toOfflineCheckpoints(eventId, waymarks)
     return JSON.stringify({ eventId, checkpoints: cps }, null, 2)
   }, [eventId, waymarks])
+
+  // Load events for the dropdown (if Supabase configured).
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const supabase = getSupabaseOrNull()
+      if (!supabase) {
+        setEvents([])
+        setEventsError(null)
+        return
+      }
+      setEventsError(null)
+      const { data, error } = await supabase
+        .from('events')
+        .select('id,title,location')
+        .order('start_date', { ascending: false })
+        .limit(50)
+      if (cancelled) return
+      if (error) {
+        setEvents([])
+        setEventsError(error.message)
+        return
+      }
+      setEvents((data as any as EventRow[]) ?? [])
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Load map options for the selected event.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const supabase = getSupabaseOrNull()
+      if (!supabase || !eventId) {
+        setOptions([])
+        setOptionsError(null)
+        return
+      }
+
+      setOptionsError(null)
+      const { data, error } = await supabase
+        .from('event_map_options')
+        .select('id,event_id,name,status,checkpoints,bounding_box,min_zoom,max_zoom,tile_template_url,updated_at')
+        .eq('event_id', eventId)
+        .order('updated_at', { ascending: false })
+
+      if (cancelled) return
+      if (error) {
+        setOptions([])
+        setOptionsError(error.message)
+        return
+      }
+
+      const rows = ((data as any) ?? []) as MapOptionRow[]
+      setOptions(rows)
+
+      // Choose live option first, else newest.
+      const preferred = rows.find((r) => r.status === 'live') ?? rows[0] ?? null
+      setSelectedOptionId(preferred?.id ?? '')
+      if (preferred?.checkpoints?.length) {
+        setWaymarks(fromOfflineCheckpoints(preferred.checkpoints))
+      } else {
+        setWaymarks([])
+      }
+      setMinZoom(preferred?.min_zoom ?? 13)
+      setMaxZoom(preferred?.max_zoom ?? 15)
+      setBbox(preferred?.bounding_box ?? null)
+      setTileTemplateUrl(preferred?.tile_template_url ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png')
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [eventId])
+
+  // When user switches map option, load its checkpoints/settings.
+  useEffect(() => {
+    const opt = selectedOption
+    if (!opt) return
+    setWaymarks(fromOfflineCheckpoints(opt.checkpoints ?? []))
+    setMinZoom(opt.min_zoom ?? 13)
+    setMaxZoom(opt.max_zoom ?? 15)
+    setBbox(opt.bounding_box ?? null)
+    setTileTemplateUrl(opt.tile_template_url ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png')
+  }, [selectedOptionId])
+
+  const createNewOption = async () => {
+    const supabase = getSupabaseOrNull()
+    if (!supabase) return
+    if (!eventId) return
+    const name = newOptionName.trim()
+    if (!name) return
+
+    setSaving(true)
+    setOptionsError(null)
+    try {
+      const checkpoints = toOfflineCheckpoints(eventId, waymarks)
+      const payload = {
+        event_id: eventId,
+        name,
+        status: 'draft',
+        checkpoints,
+        bounding_box: bbox ?? bboxFromWaymarks(waymarks),
+        min_zoom: minZoom,
+        max_zoom: maxZoom,
+        tile_template_url: tileTemplateUrl,
+      }
+
+      const { data, error } = await supabase
+        .from('event_map_options')
+        .insert(payload as any)
+        .select('id,event_id,name,status,checkpoints,bounding_box,min_zoom,max_zoom,tile_template_url,updated_at')
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('Failed to create option')
+
+      setNewOptionName('')
+      const row = data as any as MapOptionRow
+      setOptions((prev) => [row, ...prev])
+      setSelectedOptionId(row.id)
+    } catch (e) {
+      setOptionsError(e instanceof Error ? e.message : 'Failed to create option')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveOption = async () => {
+    const supabase = getSupabaseOrNull()
+    if (!supabase) return
+    if (!eventId) return
+    if (!selectedOptionId) return
+
+    setSaving(true)
+    setOptionsError(null)
+    try {
+      const checkpoints = toOfflineCheckpoints(eventId, waymarks)
+      const payload = {
+        checkpoints,
+        bounding_box: bbox ?? bboxFromWaymarks(waymarks),
+        min_zoom: minZoom,
+        max_zoom: maxZoom,
+        tile_template_url: tileTemplateUrl,
+      }
+
+      const { data, error } = await supabase
+        .from('event_map_options')
+        .update(payload as any)
+        .eq('id', selectedOptionId)
+        .select('id,event_id,name,status,checkpoints,bounding_box,min_zoom,max_zoom,tile_template_url,updated_at')
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('Save failed')
+      const row = data as any as MapOptionRow
+      setOptions((prev) => prev.map((p) => (p.id === row.id ? row : p)))
+    } catch (e) {
+      setOptionsError(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const publishLive = async () => {
+    const supabase = getSupabaseOrNull()
+    if (!supabase) return
+    if (!selectedOptionId) return
+    // Save first so live always matches current edits.
+    await saveOption()
+    setSaving(true)
+    setOptionsError(null)
+    try {
+      const { error } = await supabase.rpc('publish_event_map_option', { p_option_id: selectedOptionId } as any)
+      if (error) throw new Error(error.message)
+      setOptions((prev) =>
+        prev.map((p) => (p.event_id === eventId ? { ...p, status: p.id === selectedOptionId ? 'live' : 'draft' } : p)),
+      )
+    } catch (e) {
+      setOptionsError(e instanceof Error ? e.message : 'Publish failed')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     ensureMapLibreWorker()
@@ -356,14 +611,25 @@ export function MapEditorPage() {
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium">{tr({ en: 'Event ID', pt: 'ID do evento' })}</label>
+            <label className="block text-sm font-medium">{tr({ en: 'Race (event)', pt: 'Prova (evento)' })}</label>
             <div className="mt-1 flex gap-2">
-              <input
+              <select
                 className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
-                value={eventIdInput}
-                onChange={(e) => setEventIdInput(e.target.value)}
-                placeholder="demo-bra-florianopolis-10k"
-              />
+                value={events.some((e) => e.id === eventId) ? eventId : ''}
+                onChange={(e) => {
+                  const id = e.target.value
+                  if (!id) return
+                  setEventIdInput(id)
+                  navigate(`/admin/map-editor/${encodeURIComponent(id)}`)
+                }}
+              >
+                <option value="">{tr({ en: 'Select an event…', pt: 'Selecione um evento…' })}</option>
+                {events.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.title}
+                  </option>
+                ))}
+              </select>
               <button
                 className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
                 onClick={() => {
@@ -371,10 +637,12 @@ export function MapEditorPage() {
                   if (!v) return
                   navigate(`/admin/map-editor/${encodeURIComponent(v)}`)
                 }}
+                title={tr({ en: 'Open by ID (advanced)', pt: 'Abrir por ID (avançado)' })}
               >
                 {tr({ en: 'Open', pt: 'Abrir' })}
               </button>
             </div>
+            {eventsError ? <div className="mt-1 text-xs text-red-700">{eventsError}</div> : null}
           </div>
 
           <div>
@@ -389,6 +657,63 @@ export function MapEditorPage() {
               <option value="finish">{tr({ en: 'Set FINISH', pt: 'Definir CHEGADA' })}</option>
               <option value="pan">{tr({ en: 'Pan only', pt: 'Somente navegar' })}</option>
             </select>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium">{tr({ en: 'Map options', pt: 'Opções de mapa' })}</label>
+            <div className="mt-1 flex gap-2">
+              <select
+                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                value={selectedOptionId}
+                onChange={(e) => setSelectedOptionId(e.target.value)}
+                disabled={!eventId}
+              >
+                <option value="">{tr({ en: 'Select a map option…', pt: 'Selecione uma opção…' })}</option>
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.status === 'live' ? 'LIVE · ' : ''}{o.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+                onClick={() => void saveOption()}
+                disabled={!selectedOptionId || saving}
+                title={tr({ en: 'Save current edits into this option', pt: 'Salvar alterações nesta opção' })}
+              >
+                {tr({ en: 'Save', pt: 'Salvar' })}
+              </button>
+              <button
+                className="rounded-md bg-black px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                onClick={() => void publishLive()}
+                disabled={!selectedOptionId || saving}
+                title={tr({ en: 'Make this option the LIVE one for downloads', pt: 'Tornar esta opção a LIVE para downloads' })}
+              >
+                {tr({ en: 'Publish LIVE', pt: 'Publicar LIVE' })}
+              </button>
+            </div>
+            {optionsError ? <div className="mt-1 text-xs text-red-700">{optionsError}</div> : null}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium">{tr({ en: 'New option name', pt: 'Nome da nova opção' })}</label>
+            <div className="mt-1 flex gap-2">
+              <input
+                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                value={newOptionName}
+                onChange={(e) => setNewOptionName(e.target.value)}
+                placeholder={tr({ en: 'Final course v2', pt: 'Percurso final v2' })}
+              />
+              <button
+                className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+                onClick={() => void createNewOption()}
+                disabled={!eventId || saving || !newOptionName.trim()}
+              >
+                {tr({ en: 'Create', pt: 'Criar' })}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -502,6 +827,63 @@ export function MapEditorPage() {
           >
             {tr({ en: 'Copy JSON', pt: 'Copiar JSON' })}
           </button>
+
+          <button
+            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+            onClick={() => {
+              const next = bboxFromWaymarks(waymarks)
+              setBbox(next)
+            }}
+            title={tr({ en: 'Compute bbox around current waymarks', pt: 'Calcular bbox ao redor dos waymarks' })}
+          >
+            {tr({ en: 'BBox from waymarks', pt: 'BBox dos waymarks' })}
+          </button>
+          <button
+            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+            onClick={() => {
+              const map = mapRef.current
+              if (!map) return
+              const b = map.getBounds()
+              setBbox({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() })
+            }}
+            title={tr({ en: 'Use current map view as bbox', pt: 'Usar view atual como bbox' })}
+          >
+            {tr({ en: 'BBox from view', pt: 'BBox da tela' })}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div>
+            <label className="block text-sm font-medium">{tr({ en: 'Min zoom', pt: 'Zoom mínimo' })}</label>
+            <input
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+              type="number"
+              value={minZoom}
+              onChange={(e) => setMinZoom(Number(e.target.value))}
+              min={0}
+              max={22}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">{tr({ en: 'Max zoom', pt: 'Zoom máximo' })}</label>
+            <input
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+              type="number"
+              value={maxZoom}
+              onChange={(e) => setMaxZoom(Number(e.target.value))}
+              min={0}
+              max={22}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">{tr({ en: 'Tile template URL', pt: 'URL template de tiles' })}</label>
+            <input
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+              value={tileTemplateUrl}
+              onChange={(e) => setTileTemplateUrl(e.target.value)}
+              placeholder="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </div>
         </div>
       </section>
 
@@ -521,10 +903,14 @@ export function MapEditorPage() {
                     .sort((a, b) => a.code.localeCompare(b.code))
                     .map((w) => (
                       <li key={w.id} className="flex items-center justify-between gap-2">
-                        <div className="truncate">
+                        <button
+                          className="truncate text-left hover:underline"
+                          onClick={() => flyToWaymark(w)}
+                          title={tr({ en: 'Center map on this waypoint', pt: 'Centralizar mapa neste waypoint' })}
+                        >
                           <span className="font-semibold">{w.code}</span>{' '}
                           <span className="text-zinc-600">({w.lat.toFixed(5)},{' '}{w.lon.toFixed(5)})</span>
-                        </div>
+                        </button>
                         <button
                           className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs"
                           onClick={() => setWaymarks((prev) => prev.filter((p) => p.id !== w.id))}
@@ -551,8 +937,8 @@ export function MapEditorPage() {
               />
               <div className="mt-2 text-xs text-zinc-600">
                 {tr({
-                  en: 'Next step: publish this JSON to Supabase so athletes downloading the map get the new START/FIN/CPs immediately.',
-                  pt: 'Próximo passo: publicar este JSON no Supabase para que atletas baixando o mapa recebam os novos waymarks imediatamente.',
+                  en: 'Use Save / Publish LIVE above to push changes to the site (LIVE is what download uses).',
+                  pt: 'Use Salvar / Publicar LIVE acima para enviar mudanças ao site (LIVE é o que o download usa).',
                 })}
               </div>
             </div>
